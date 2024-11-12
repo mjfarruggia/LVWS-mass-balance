@@ -73,3 +73,5 @@ percentile_days <- LochQ %>%
   mutate(day_20th_wydoy = hydro.day(day_20th),
          day_50th_wydoy = hydro.day(day_50th),
          day_80th_wydoy = hydro.day(day_80th))
+
+tree -L 2

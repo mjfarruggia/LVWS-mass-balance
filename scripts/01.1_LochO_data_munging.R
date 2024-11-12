@@ -235,3 +235,23 @@ annual_flux %>%
 #There are some gaps at the daily scale
 #May need to just toss out the interpolation to the daily scale and just grab flow on the day
 # of each water sample collection and estimated weekly fluxes? (daily C * daily Q * 7)?
+
+
+## WEEKLY flux esimates instead
+
+outlet_raw_weekly <- LochO_chem %>%
+  inner_join(., LochQ %>% select(date, Q_m3s), by=c("DATE"="date","waterYear")) %>%
+  left_join(., percentile_days %>% select(waterYear, day_20th_wydoy:day_80th_wydoy), by="waterYear") %>%
+  mutate(wy_doy = hydro.day(DATE))
+
+outlet_weekly_flux <- outlet_raw_weekly %>%
+  filter(waterYear >= 1991 & waterYear <= 2021) %>%
+  mutate(week_number = week(DATE)) %>%
+  # If there are multiple samples in a week, just get the mean
+  pivot_longer(c(SO4, CA, K,  MG, SODIUM, NH4_calc, NO3_calc, SiO2)) %>% #units for all are mg/L
+  group_by(waterYear, week_number, name) %>%
+  summarize(value = mean(value, na.rm=TRUE),
+            Q_m3s = mean(Q_m3s)) %>%
+  mutate(flux_mg_s = value * Q_m3s * 1000, #1000 L per m3
+         flux_kg_week = flux_mg_s * 86400 * 10e-6 * 7) 
+

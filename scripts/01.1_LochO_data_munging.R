@@ -74,4 +74,164 @@ percentile_days <- LochQ %>%
          day_50th_wydoy = hydro.day(day_50th),
          day_80th_wydoy = hydro.day(day_80th))
 
-tree -L 2
+LochO_chem <-
+  read.csv(
+    "data/LVWS_waterchem_master.csv",
+    sep = ",",
+    header = TRUE,
+    skip = 1,
+    na.strings = c("", " ", "NA")
+  ) %>%
+  select(-X) %>%
+  rename(
+    site_id = SITE.ID,
+    SODIUM = NA.,
+    FLUORINE = `F`,
+    NH4_calc = NH4.calc,
+    NO3_calc = NO3.calc,
+    TDN_calc = TDN.calc,
+    PO4_NREL_calc = PO4_NREL.calc,
+    TP_NREL_calc = TP_NREL.calc
+  ) %>%
+  mutate(
+    DATE = mdy(`DATE`),
+    NO3_calc = case_when( #override old column
+      NO3 == "<0.01" ~ 0.005,
+      NO3 == "<0.02" ~ 0.01,
+      NO3 == "<0.03" ~ 0.015,
+      TRUE ~ as.numeric(NO3)
+    ),
+    NH4_calc = case_when(
+      NH4 == "<0.01" ~ 0.005,
+      NH4 == "0" ~ 0.005, #check w Jill if this is actually how we wanna treat zeros
+      TRUE ~ as.numeric(NH4)
+    )) %>%
+  filter(SITE=="LOCH.O" | SITE=="LOCH.O ") %>%
+  filter(TYPE == "NORMAL") %>%
+  mutate(waterYear = calcWaterYear(DATE)) %>%
+  mutate(across(TEMP:ncol(.), as.numeric))
+length(unique(LochO_chem$DATE)) # There are some duplicate dates-- why?
+
+#For now take mean of everything for multiple day entries, but ask Jill about this
+LochO_chem <- LochO_chem %>%
+  group_by(DATE) %>%
+  summarise(across(TEMP:waterYear, ~ mean(.x, na.rm = TRUE))) %>%
+  mutate(across(TEMP:waterYear, ~ ifelse(is.nan(.), NA, .)))
+
+#Add in missing data from 2019 and 2020
+LochO_chem2 <- 
+  read.csv(
+    "data/LVWS_2019_2020_master.csv",
+    sep = ",",
+    skip = 1,
+    header = TRUE,
+    na.strings = c("", " ", "NA"),
+    strip.white = TRUE
+  ) %>%
+  rename(
+    site_id = SITE.ID,
+    SODIUM = NA.,
+    FLUORINE = `F`,
+    NH4_calc = NH4.calc,
+    NO3_calc = NO3.calc,
+    TDN_calc = TDN.calc,
+    PO4_NREL_calc = PO4_NREL.calc,
+    TP_NREL_calc = TP_NREL.calc
+  ) %>%
+  mutate(
+    DATE = mdy(`DATE`),
+    NO3_calc = case_when( #override old column
+      NO3 == "<0.01" ~ 0.005,
+      NO3 == "<0.02" ~ 0.01,
+      NO3 == "<0.03" ~ 0.015,
+      TRUE ~ as.numeric(NO3)
+    ),
+    NH4_calc = case_when(
+      NH4 == "<0.01" ~ 0.005,
+      NH4 == "0" ~ 0.005, #check w Jill if this is actually how we wanna treat zeros
+      TRUE ~ as.numeric(NH4)
+    )) %>%
+  filter(SITE=="LOCH.O" | SITE=="LOCH.O ") %>%
+  filter(TYPE == "NORMAL") %>%
+  mutate(waterYear = calcWaterYear(DATE)) %>%
+  mutate(across(TEMP:ncol(.), as.numeric))
+
+LochO_chem <- bind_rows(LochO_chem, LochO_chem2)
+
+#Find dupes
+DUPES <- LochO_chem[duplicated(LochO_chem$DATE)|duplicated(LochO_chem$DATE, fromLast=TRUE),]
+#There's some redundancy. Take the mean of the 2 (they are identical)
+
+LochO_chem <- LochO_chem %>%
+  group_by(DATE) %>%
+  summarise(across(TEMP:waterYear, ~ mean(.x, na.rm = TRUE))) %>%
+  mutate(across(TEMP:waterYear, ~ ifelse(is.nan(.), NA, .)))
+
+
+length(unique(LochO_chem$DATE))
+# outlet_raw <- LochO_chem %>%
+#   left_join(., LochQ %>% select(date, Q_m3s), by=c("DATE"="date","waterYear")) %>%
+#   left_join(., percentile_days %>% select(waterYear, day_20th_wydoy:day_80th_wydoy), by="waterYear") %>%
+#   mutate(wy_doy = hydro.day(DATE))
+
+outlet_raw <- LochQ %>%
+  select(date, Q_m3s) %>%
+  left_join(., LochO_chem, by=c("date"="DATE","waterYear")) %>%
+  left_join(., percentile_days %>% select(waterYear, day_20th_wydoy:day_80th_wydoy), by="waterYear") %>%
+  mutate(wy_doy = hydro.day(date))
+
+
+outlet_raw %>%
+  select(wy_doy, waterYear,NO3_calc, Q_m3s) %>%
+  pivot_longer(-c(wy_doy, waterYear)) %>%
+  ggplot(aes(x=wy_doy, y=value, color=name))+
+  geom_point()+
+  facet_wrap(name ~ waterYear)
+#Confirmeed that year-round Q and NO3 start in 1991. 1984-1991 will only use summer values
+
+#For now, work only with WY 1991 to present
+
+outlet_post91 <- outlet_raw %>%
+  filter(waterYear >= 1991 & waterYear <= 2021) %>%
+  mutate(SO4_impute = imputeTS::na_interpolation(SO4, maxgap = 14),
+         CA_impute = imputeTS::na_interpolation(CA, maxgap = 14),
+         # FLUORINE_impute = imputeTS::na_interpolation(FLUORINE, maxgap = 14),
+         K_impute = imputeTS::na_interpolation(K, maxgap = 14),
+         MG_impute = imputeTS::na_interpolation(MG, maxgap = 14),
+         SODIUM_impute = imputeTS::na_interpolation(SODIUM, maxgap = 14),
+         NH4_impute = imputeTS::na_interpolation(NH4_calc, maxgap = 14),
+         NO3_impute = imputeTS::na_interpolation(NO3_calc, maxgap = 14),
+         SiO2_impute = imputeTS::na_interpolation(SiO2, maxgap = 14))
+
+#Check if these look ok
+outlet_post91 %>%
+  select(wy_doy, waterYear,NO3_impute, Q_m3s) %>%
+  pivot_longer(-c(wy_doy, waterYear)) %>%
+  ggplot(aes(x=wy_doy, y=value, color=name))+
+  geom_point()+
+  facet_wrap(name ~ waterYear) #Note still missing quite a bit of 2020 nitrate data :(
+
+outlet_post91 <- outlet_post91 %>%
+  # mutate(cations = CA+FLUORINE+K+MG+SODIUM+NH4_calc) %>% #A lot NAs... leave this out for now
+  pivot_longer(c(contains("impute"))) %>% #units for all are mg/L
+  mutate(flux_mg_s = value * Q_m3s * 1000, #1000 L per m3
+         flux_kg_day = flux_mg_s * 86400 * 10e-6) 
+
+annual_flux <- outlet_post91 %>%
+  select(waterYear, flux_kg_day, name) %>%
+  group_by(waterYear, name) %>%
+  mutate(cum_daily_flux_kg = cumsum(flux_kg_day),
+         wy_doy = seq(1:n())) %>%
+         # annual_flux_kg =sum(flux_kg_day)) %>%
+  arrange(waterYear, name)
+
+annual_flux %>%
+  filter(name=="NO3_impute") %>%
+  ggplot(aes(x=wy_doy, y=cum_daily_flux_kg, color=name))+
+  geom_point()+
+  facet_wrap(name ~ waterYear)
+
+
+#There are some gaps at the daily scale
+#May need to just toss out the interpolation to the daily scale and just grab flow on the day
+# of each water sample collection and estimated weekly fluxes? (daily C * daily Q * 7)?

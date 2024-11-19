@@ -30,7 +30,8 @@ pacman::p_load("lubridate",
                "dataRetrieval",
                "snotelr",
                "naniar",
-               "tsibble")
+               "tsibble",
+               "visdat")
 
 #Use renv for version control.  Beginner guide here:
 # https://rstudio.github.io/renv/articles/renv.html

@@ -169,10 +169,10 @@ LochO_chem <- LochO_chem %>%
 
 
 length(unique(LochO_chem$DATE))
-# outlet_raw <- LochO_chem %>%
-#   left_join(., LochQ %>% select(date, Q_m3s), by=c("DATE"="date","waterYear")) %>%
-#   left_join(., percentile_days %>% select(waterYear, day_20th_wydoy:day_80th_wydoy), by="waterYear") %>%
-#   mutate(wy_doy = hydro.day(DATE))
+
+#Check for missing data
+vis_miss(LochO_chem)
+
 
 outlet_raw <- LochQ %>%
   select(date, Q_m3s) %>%
@@ -191,45 +191,45 @@ outlet_raw %>%
 
 #For now, work only with WY 1991 to present
 
-outlet_post91 <- outlet_raw %>%
-  filter(waterYear >= 1991 & waterYear <= 2021) %>%
-  mutate(SO4_impute = imputeTS::na_interpolation(SO4, maxgap = 14),
-         CA_impute = imputeTS::na_interpolation(CA, maxgap = 14),
-         # FLUORINE_impute = imputeTS::na_interpolation(FLUORINE, maxgap = 14),
-         K_impute = imputeTS::na_interpolation(K, maxgap = 14),
-         MG_impute = imputeTS::na_interpolation(MG, maxgap = 14),
-         SODIUM_impute = imputeTS::na_interpolation(SODIUM, maxgap = 14),
-         NH4_impute = imputeTS::na_interpolation(NH4_calc, maxgap = 14),
-         NO3_impute = imputeTS::na_interpolation(NO3_calc, maxgap = 14),
-         SiO2_impute = imputeTS::na_interpolation(SiO2, maxgap = 14))
-
-#Check if these look ok
-outlet_post91 %>%
-  select(wy_doy, waterYear,NO3_impute, Q_m3s) %>%
-  pivot_longer(-c(wy_doy, waterYear)) %>%
-  ggplot(aes(x=wy_doy, y=value, color=name))+
-  geom_point()+
-  facet_wrap(name ~ waterYear) #Note still missing quite a bit of 2020 nitrate data :(
-
-outlet_post91 <- outlet_post91 %>%
-  # mutate(cations = CA+FLUORINE+K+MG+SODIUM+NH4_calc) %>% #A lot NAs... leave this out for now
-  pivot_longer(c(contains("impute"))) %>% #units for all are mg/L
-  mutate(flux_mg_s = value * Q_m3s * 1000, #1000 L per m3
-         flux_kg_day = flux_mg_s * 86400 * 10e-6) 
-
-annual_flux <- outlet_post91 %>%
-  select(waterYear, flux_kg_day, name) %>%
-  group_by(waterYear, name) %>%
-  mutate(cum_daily_flux_kg = cumsum(flux_kg_day),
-         wy_doy = seq(1:n())) %>%
-         # annual_flux_kg =sum(flux_kg_day)) %>%
-  arrange(waterYear, name)
-
-annual_flux %>%
-  filter(name=="NO3_impute") %>%
-  ggplot(aes(x=wy_doy, y=cum_daily_flux_kg, color=name))+
-  geom_point()+
-  facet_wrap(name ~ waterYear)
+# outlet_post91 <- outlet_raw %>%
+#   filter(waterYear >= 1991 & waterYear <= 2021) %>%
+#   mutate(SO4_impute = imputeTS::na_interpolation(SO4, maxgap = 14),
+#          CA_impute = imputeTS::na_interpolation(CA, maxgap = 14),
+#          # FLUORINE_impute = imputeTS::na_interpolation(FLUORINE, maxgap = 14),
+#          K_impute = imputeTS::na_interpolation(K, maxgap = 14),
+#          MG_impute = imputeTS::na_interpolation(MG, maxgap = 14),
+#          SODIUM_impute = imputeTS::na_interpolation(SODIUM, maxgap = 14),
+#          NH4_impute = imputeTS::na_interpolation(NH4_calc, maxgap = 14),
+#          NO3_impute = imputeTS::na_interpolation(NO3_calc, maxgap = 14),
+#          SiO2_impute = imputeTS::na_interpolation(SiO2, maxgap = 14))
+# 
+# #Check if these look ok
+# outlet_post91 %>%
+#   select(wy_doy, waterYear,NO3_impute, Q_m3s) %>%
+#   pivot_longer(-c(wy_doy, waterYear)) %>%
+#   ggplot(aes(x=wy_doy, y=value, color=name))+
+#   geom_point()+
+#   facet_wrap(name ~ waterYear) #Note still missing quite a bit of 2020 nitrate data :(
+# 
+# outlet_post91 <- outlet_post91 %>%
+#   # mutate(cations = CA+FLUORINE+K+MG+SODIUM+NH4_calc) %>% #A lot NAs... leave this out for now
+#   pivot_longer(c(contains("impute"))) %>% #units for all are mg/L
+#   mutate(flux_mg_s = value * Q_m3s * 1000, #1000 L per m3
+#          flux_kg_day = flux_mg_s * 86400 * 10e-6) 
+# 
+# annual_flux <- outlet_post91 %>%
+#   select(waterYear, flux_kg_day, name) %>%
+#   group_by(waterYear, name) %>%
+#   mutate(cum_daily_flux_kg = cumsum(flux_kg_day),
+#          wy_doy = seq(1:n())) %>%
+#          # annual_flux_kg =sum(flux_kg_day)) %>%
+#   arrange(waterYear, name)
+# 
+# annual_flux %>%
+#   filter(name=="NO3_impute") %>%
+#   ggplot(aes(x=wy_doy, y=cum_daily_flux_kg, color=name))+
+#   geom_point()+
+#   facet_wrap(name ~ waterYear)
 
 
 #There are some gaps at the daily scale
@@ -240,18 +240,40 @@ annual_flux %>%
 ## WEEKLY flux esimates instead
 
 outlet_raw_weekly <- LochO_chem %>%
-  inner_join(., LochQ %>% select(date, Q_m3s), by=c("DATE"="date","waterYear")) %>%
+  left_join(., LochQ %>% select(date, Q_m3s), by=c("DATE"="date","waterYear")) %>%
   left_join(., percentile_days %>% select(waterYear, day_20th_wydoy:day_80th_wydoy), by="waterYear") %>%
   mutate(wy_doy = hydro.day(DATE))
 
 outlet_weekly_flux <- outlet_raw_weekly %>%
   filter(waterYear >= 1991 & waterYear <= 2021) %>%
   mutate(weekofyear = week(DATE)) %>%
+  mutate(cations_mgL = CA + MG + SODIUM + K,
+         inorganicN_mgL = NO3_calc + NH4_calc) %>%
+  # select(-c(CA, MG, SODIUM, K)) %>%
   # If there are multiple samples in a week, just get the mean
-  pivot_longer(c(SO4, CA, K,  MG, SODIUM, NH4_calc, NO3_calc, SiO2)) %>% #units for all are mg/L
-  group_by(waterYear, weekofyear, name) %>%
-  summarize(value = mean(value, na.rm=TRUE),
-            Q_m3s = mean(Q_m3s)) %>%
-  mutate(flux_mg_s = value * Q_m3s * 1000, #1000 L per m3
-         flux_kg_week = flux_mg_s * 86400 * 10e-6 * 7) 
+  select(DATE, waterYear, weekofyear, Q_m3s, SO4, cations_mgL, NH4_calc, NO3_calc, inorganicN_mgL, SiO2) %>%
+  pivot_longer(c(SO4, cations_mgL, NH4_calc, NO3_calc, inorganicN_mgL, SiO2),
+               names_to = "chem_name",
+               values_to = "chem_value") %>% #units for all are mg/L
+  group_by(chem_name, waterYear, weekofyear) %>% 
+  summarize(chem_value = median(chem_value, na.rm=TRUE),
+            Q_m3s = median(Q_m3s, na.rm=TRUE)) %>% #take the median if >1 sample per week
+  arrange(chem_name, waterYear, weekofyear) %>%
+  as_tsibble(., key = c(chem_name,waterYear), index = weekofyear) %>% #time series tibble
+  fill_gaps() %>%
+  as.data.frame() %>%
+  arrange(chem_name, waterYear, weekofyear) %>%
+  group_by(chem_name) %>%
+  mutate(chem_value = imputeTS::na_interpolation(chem_value, maxgap = 3),
+         Q_m3s = imputeTS::na_interpolation(Q_m3s, maxgap = 3)) %>%
+  group_by(chem_name, waterYear, weekofyear) %>%
+  mutate(flux_mg_s = chem_value * Q_m3s * 1000, #1000 L per m3
+         flux_kg_week = flux_mg_s * 86400 * 10e-6 * 7,
+         flux_kg_per_ha = flux_kg_week / 660) #kg per week 
+  
+
+# vis_miss(outlet_weekly_flux %>% pivot_wider(names_from = chem_name,
+#                                             values_from = chem_value))
+
+  
 

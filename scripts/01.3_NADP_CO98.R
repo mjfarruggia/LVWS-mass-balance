@@ -16,11 +16,5 @@ NADP <- read_csv(here("data/NTN-CO98-1984-2024.csv")) %>%
   mutate(dateOn = date(dateTimeOn),
          dateOff = date(dateTimeOff),
          weekofyear = week(dateOn),
+         year = year(dateOn),
          waterYear = calcWaterYear(dateOn))
-
-
-#Preview data
-NADP %>%
-  ggplot(aes(x=weekofyear, y= subppt_mm))+
-  geom_point() +
-  facet_wrap(~waterYear)

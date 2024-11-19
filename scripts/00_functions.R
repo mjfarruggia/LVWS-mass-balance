@@ -6,3 +6,6 @@ hydro.day = function(x, start.month = 10L) {
   as.integer(x - start.date + 1L)
 }
 
+
+
+loch_ws_size_m2 <- 6.6e+6

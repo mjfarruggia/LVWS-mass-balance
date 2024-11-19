@@ -1,0 +1,194 @@
+---
+title: "NADP_trend_analysis"
+author: "Bella Oleksy"
+date: "2024-11-19"
+output: html_document
+---
+
+
+# Some notes at the top about data processing
+
+<b>Interpolation method--</b>
+- In the future we'll want to (I think) mirror the method by Bret A. Schichtel et al. 2019 Sci Tot Env. Here, I am linearlly interpolated for periods of missing data with gaps no more than 2 weeks apart 
+
+<b>Year vs. water year--</b>
+Aggregating data on an annual basis instead of WY. Just flagging that in case we switch to WY later.
+
+```{r setup, include=FALSE, echo=FALSE}
+#source scripts
+source("scripts/00_functions.R")
+source("scripts/00_libraries.R")
+source("scripts/01.1_LochO_data_munging.R")
+source("scripts/01.2_Bear_Lake_SNOTEL.R")
+source("scripts/01.3_NADP_CO98.R")
+knitr::opts_chunk$set(fig.width=unit(18,"cm"), fig.height=unit(11,"cm"))
+```
+
+## Missing data:
+Data are missing throughout, unsurprisingly, but there are a few time periods that stick out, like 1986.
+I will exclude them for the initial trend analysis because they are biased low.
+```{r, echo=FALSE}
+vis_miss(NADP%>%
+           select(waterYear, weekofyear, subppt_mm, Ca_mgL, Mg_mgL, K_mgL, NH4_mgL, NO3_mgL, SO4_mgL, Na_mgL) %>%
+           filter(waterYear=="1986"))
+
+```
+
+```{r, echo=FALSE, include=FALSE}
+#Visualize missing data with naniar package
+vis_dat(NADP)
+vis_miss(NADP%>%
+           select(waterYear, weekofyear, subppt_mm, Ca_mgL, Mg_mgL, K_mgL, NH4_mgL, NO3_mgL, SO4_mgL, Na_mgL))
+
+#We are missing a ton of data in 1986 so the interpolations will still underestimate.
+#Remove for trend analyses?
+
+ggplot(NADP, 
+       aes(x = weekofyear, 
+           y = NO3_mgL)) + 
+  geom_miss_point() +
+  facet_wrap(~waterYear)
+
+NADP_trim <- NADP %>%
+  select(waterYear, weekofyear, subppt_mm, Ca_mgL, Mg_mgL, K_mgL, NH4_mgL, NO3_mgL, SO4_mgL, Na_mgL) %>%
+  mutate(cations_mgL = Ca_mgL + Mg_mgL + Na_mgL + K_mgL,
+         inorganicN_mgL = NH4_mgL + NO3_mgL) %>%
+  select(-c(Ca_mgL, Mg_mgL, Na_mgL, K_mgL)) %>%
+  pivot_longer(-c(1:3),
+               names_to = "deposition_name",
+               values_to = "deposition_value_mg_L") %>%
+  mutate(rainwater_m3 = (subppt_mm/1000)*loch_ws_size_m2, # over the entire watershed that week
+         deposition_value_kg_m3 = deposition_value_mg_L / 1e+3, # Convert  concentration from mg/L to kg/m³
+         deposition_kg = rainwater_m3 * deposition_value_kg_m3, #kg across the time period (a week in this case)
+         deposition_kg_per_ha = deposition_kg/660) 
+
+#Annual dep
+annual_dep <- NADP %>%
+  select(waterYear, weekofyear, subppt_mm, Ca_mgL, Mg_mgL, K_mgL, NH4_mgL, NO3_mgL, SO4_mgL, Na_mgL) %>%
+  mutate(cations_mgL = Ca_mgL + Mg_mgL + Na_mgL + K_mgL,
+         inorganicN_mgL = NH4_mgL + NO3_mgL) %>%
+  select(-c(Ca_mgL, Mg_mgL, Na_mgL, K_mgL)) %>%
+  pivot_longer(-c(1:3),
+               names_to = "deposition_name",
+               values_to = "deposition_value_mg_L") %>%
+  # filter(deposition_name=="NO3_mgL") %>%
+  distinct(deposition_name, waterYear, weekofyear, .keep_all = TRUE) %>%
+  arrange(deposition_name,waterYear, weekofyear) %>%
+  as_tsibble(., key = c(deposition_name,waterYear), index = weekofyear) %>% #time series tibble
+  fill_gaps() %>%
+  #impute missing data
+  mutate(subppt_mm = imputeTS::na_interpolation(subppt_mm, maxgap = 2),
+         deposition_value_mg_L = imputeTS::na_interpolation(deposition_value_mg_L, maxgap = 2),
+         rainwater_m3 = (subppt_mm/1000)*loch_ws_size_m2, # over the entire watershed that week
+         deposition_value_kg_m3 = deposition_value_mg_L / 1e+3, # Convert  concentration from mg/L to kg/m³
+         deposition_kg = rainwater_m3 * deposition_value_kg_m3, #kg across the time period (a week in this case)
+         deposition_kg_per_ha = deposition_kg/660) %>%
+  as.data.frame() %>%
+  group_by(waterYear, deposition_name) %>%
+  summarize(deposition_kg_per_ha_impute = sum(deposition_kg_per_ha, na.rm=TRUE))
+
+#Monthly dep (June-Aug)
+monthly_dep <- NADP %>%
+  select(waterYear, weekofyear, subppt_mm, Ca_mgL, Mg_mgL, K_mgL, NH4_mgL, NO3_mgL, SO4_mgL, Na_mgL) %>%
+  mutate(cations_mgL = Ca_mgL + Mg_mgL + Na_mgL + K_mgL,
+         inorganicN_mgL = NH4_mgL + NO3_mgL) %>%
+  select(-c(Ca_mgL, Mg_mgL, Na_mgL, K_mgL)) %>%
+  pivot_longer(-c(1:3),
+               names_to = "deposition_name",
+               values_to = "deposition_value_mg_L") %>%
+  # filter(deposition_name=="NO3_mgL") %>%
+  distinct(deposition_name, waterYear, weekofyear, .keep_all = TRUE) %>%
+  arrange(deposition_name,waterYear, weekofyear) %>%
+  as_tsibble(., key = c(deposition_name,waterYear), index = weekofyear) %>% #time series tibble
+  fill_gaps() %>%
+  #impute missing data
+  mutate(subppt_mm = imputeTS::na_interpolation(subppt_mm, maxgap = 2),
+         deposition_value_mg_L = imputeTS::na_interpolation(deposition_value_mg_L, maxgap = 2),
+         rainwater_m3 = (subppt_mm/1000)*loch_ws_size_m2, # over the entire watershed that week
+         deposition_value_kg_m3 = deposition_value_mg_L / 1e+3, # Convert  concentration from mg/L to kg/m³
+         deposition_kg = rainwater_m3 * deposition_value_kg_m3, #kg across the time period (a week in this case)
+         deposition_kg_per_ha = deposition_kg/660) %>%
+  as.data.frame() %>%
+  mutate(month = case_when(weekofyear %in% c(23,24,25,26) ~ "June",
+                           weekofyear %in% c(27,28,29,30) ~ "July",
+                           weekofyear %in% c(31,32,33,34) ~ "August")) %>%
+  filter(month %in% c("June","July","August")) %>%
+  group_by(waterYear, month, deposition_name) %>%
+  summarize(deposition_kg_per_ha_impute = sum(deposition_kg_per_ha, na.rm=TRUE))
+
+
+#Summer dep (June-Aug)
+summer_dep <- NADP %>%
+  select(waterYear, weekofyear, subppt_mm, Ca_mgL, Mg_mgL, K_mgL, NH4_mgL, NO3_mgL, SO4_mgL, Na_mgL) %>%
+  mutate(cations_mgL = Ca_mgL + Mg_mgL + Na_mgL + K_mgL,
+         inorganicN_mgL = NH4_mgL + NO3_mgL) %>%
+  select(-c(Ca_mgL, Mg_mgL, Na_mgL, K_mgL)) %>%
+  pivot_longer(-c(1:3),
+               names_to = "deposition_name",
+               values_to = "deposition_value_mg_L") %>%
+  # filter(deposition_name=="NO3_mgL") %>%
+  distinct(deposition_name, waterYear, weekofyear, .keep_all = TRUE) %>%
+  arrange(deposition_name,waterYear, weekofyear) %>%
+  as_tsibble(., key = c(deposition_name,waterYear), index = weekofyear) %>% #time series tibble
+  fill_gaps() %>%
+  #impute missing data
+  mutate(subppt_mm = imputeTS::na_interpolation(subppt_mm, maxgap = 2),
+         deposition_value_mg_L = imputeTS::na_interpolation(deposition_value_mg_L, maxgap = 2),
+         rainwater_m3 = (subppt_mm/1000)*loch_ws_size_m2, # over the entire watershed that week
+         deposition_value_kg_m3 = deposition_value_mg_L / 1e+3, # Convert  concentration from mg/L to kg/m³
+         deposition_kg = rainwater_m3 * deposition_value_kg_m3, #kg across the time period (a week in this case)
+         deposition_kg_per_ha = deposition_kg/660) %>%
+  as.data.frame() %>%
+  mutate(month = case_when(weekofyear %in% c(23,24,25,26) ~ "June",
+                           weekofyear %in% c(27,28,29,30) ~ "July",
+                           weekofyear %in% c(31,32,33,34) ~ "August")) %>%
+  filter(month %in% c("June","July","August")) %>%
+  mutate(season="summer") %>%
+  group_by(waterYear, season, deposition_name) %>%
+  summarize(deposition_kg_per_ha_impute = sum(deposition_kg_per_ha, na.rm=TRUE))
+
+
+
+```
+
+## Plots
+
+### Annual deposition rates 1991-2024
+```{r, echo=FALSE}
+
+# Peak at the variability 
+
+annual_dep %>%
+  filter(waterYear >= 1991 & waterYear <= 2024) %>%
+  ggplot(aes(x=waterYear, y=deposition_kg_per_ha_impute, color=deposition_name))+
+  geom_point()+
+  geom_line()+
+  facet_wrap(~deposition_name, scales="free_y")+
+  theme_few(base_size = 22)
+```
+
+### Monthly deposition rates (1984-2024)
+```{r, echo=FALSE}
+
+monthly_dep %>%
+  filter(waterYear >= 1984 & waterYear <= 2024) %>%
+  mutate(month = factor(month, levels=c("June","July","August"))) %>%
+  ggplot(aes(x=waterYear, y=deposition_kg_per_ha_impute, color=month))+
+  geom_point()+
+  geom_line()+
+  facet_wrap(deposition_name~month, scales="free_y", ncol=3)+
+  theme_few(base_size = 22)
+```
+
+### Summer deposition rates (1984-2024)
+```{r, echo=FALSE}
+
+summer_dep %>%
+  filter(waterYear >= 1984 & waterYear <= 2024) %>%
+  ggplot(aes(x=waterYear, y=deposition_kg_per_ha_impute, color=deposition_name))+
+  geom_point()+
+  geom_line()+
+  facet_wrap(~deposition_name, scales="free_y")+
+  theme_few(base_size = 22)
+
+```

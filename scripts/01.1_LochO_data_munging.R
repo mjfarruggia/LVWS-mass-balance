@@ -246,10 +246,10 @@ outlet_raw_weekly <- LochO_chem %>%
 
 outlet_weekly_flux <- outlet_raw_weekly %>%
   filter(waterYear >= 1991 & waterYear <= 2021) %>%
-  mutate(week_number = week(DATE)) %>%
+  mutate(weekofyear = week(DATE)) %>%
   # If there are multiple samples in a week, just get the mean
   pivot_longer(c(SO4, CA, K,  MG, SODIUM, NH4_calc, NO3_calc, SiO2)) %>% #units for all are mg/L
-  group_by(waterYear, week_number, name) %>%
+  group_by(waterYear, weekofyear, name) %>%
   summarize(value = mean(value, na.rm=TRUE),
             Q_m3s = mean(Q_m3s)) %>%
   mutate(flux_mg_s = value * Q_m3s * 1000, #1000 L per m3

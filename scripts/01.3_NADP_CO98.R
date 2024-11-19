@@ -12,6 +12,7 @@ NADP <- read_csv(here("data/NTN-CO98-1984-2024.csv")) %>%
          Cl_mgL = Cl,
          SO4_mgL = SO4) %>%
   replace_with_na_all(condition = ~.x == -9) %>%
+  replace_with_na_all(condition = ~.x == -9.990) %>%
   mutate(dateOn = date(dateTimeOn),
          dateOff = date(dateTimeOff),
          weekofyear = week(dateOn),

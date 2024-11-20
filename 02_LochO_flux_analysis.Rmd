@@ -9,15 +9,15 @@ output: html_document
 # Some notes at the top about data processing
 
 <b>Flux estimates--</b>
-- The numbers don't match what appears in Heath & Baron 2013 nor other papers like Mast et al 2014 ES&T
-- For example, NO3 annual yield should be in the realm of 1-4 kg/ha/yr
-- Here is how I did my calculations:
-
-For each week, I have a solute concentration and a discharge value
-solute = mg/L
+For each day, I have a solute concentration and a discharge value
+solute = mg/L;
 discharge = m3/s
 
-[mg/L] * [m3/s] * [1000L/m3] * [86400s/day]
+Concentrations are interpolated between weeks as in Mast et al. 2014 ES&T
+
+- [mg/L] * [m3/s] * [1000L/m3] * [86400s/day] = units of [kg/week]
+- Divide by the area of the watershed (660ha) and you get [kg/ha/week]
+- From there I summed across all weeks to get all annual yields (kg/ha/yr)
 
 ```{r setup, include=FALSE, echo=FALSE}
 #source scripts
@@ -29,84 +29,73 @@ source("scripts/01.1_LochO_data_munging.R")
 knitr::opts_chunk$set(fig.width=unit(12,"cm"), fig.height=unit(8,"cm"))
 ```
 
-## Missing data:
+### Missing data:
 Missing data are sprinkled throughout, but basically a non-issue. I interpolated between weeks with missing data where necessary but this is extremely rare after 1991. We do not have data past 2023 in the database yet.
-```{r, echo=FALSE}
+```{r, echo=FALSE, include=FALSE}
 vis_miss(outlet_raw_weekly%>%
            select(waterYear, NO3_calc)) 
 
 ```
 
-```{r, echo=FALSE, include=FALSE}
-
-annual_LochO_flux <- outlet_weekly_flux %>%
-  filter(waterYear >= 1991 & waterYear <= 2022) %>%
-  group_by(waterYear, chem_name) %>%
-  summarize(flux_kg_per_ha_year = sum(flux_kg_per_ha, na.rm=TRUE))
-
-
-monthly_LochO_flux <- outlet_weekly_flux %>%
-  mutate(month = case_when(weekofyear %in% c(23,24,25,26) ~ "June",
-                           weekofyear %in% c(27,28,29,30) ~ "July",
-                           weekofyear %in% c(31,32,33,34) ~ "August")) %>%
-  filter(month %in% c("June","July","August")) %>%
-  group_by(waterYear, month, chem_name) %>%
-  summarize(flux_kg_per_ha_year = sum(flux_kg_per_ha, na.rm=TRUE))
-
-
-summer_LochO_flux <- outlet_weekly_flux %>%
-  mutate(month = case_when(weekofyear %in% c(23,24,25,26) ~ "June",
-                           weekofyear %in% c(27,28,29,30) ~ "July",
-                           weekofyear %in% c(31,32,33,34) ~ "August")) %>%
-  filter(month %in% c("June","July","August")) %>%
-  mutate(season="summer") %>%
-  group_by(waterYear, season, chem_name) %>%
-  summarize(flux_kg_per_ha_year = sum(flux_kg_per_ha, na.rm=TRUE))
-
-```
 
 ## Plots
 
-### Weekly fluxes 1991-2024
-```{r}
-outlet_weekly_flux %>%
-  filter(waterYear >= 1991 & waterYear <= 2022) %>%
-  ggplot(aes(x=waterYear, y=flux_kg_per_ha, color=chem_name))+
-  geom_point()+
-  geom_line()+
-  facet_wrap(~chem_name, scales="free_y")+
-  theme_few(base_size = 24)+
-  labs(y="kg per ha per week")
-
-```
-
 ### Annual fluxes 1991-2024
 ```{r, echo=FALSE, width="100%"}
-
 # Peak at the variability 
-
-annual_LochO_flux %>%
+chem_data %>%
   filter(waterYear >= 1991 & waterYear <= 2024) %>%
-  ggplot(aes(x=waterYear, y=flux_kg_per_ha_year, color=chem_name))+
+  ggplot(aes(x=waterYear, y=annual_flux_kg_per_ha, color=chem_name))+
   geom_point()+
   geom_line()+
   facet_wrap(~chem_name, scales="free_y")+
   theme_few(base_size = 24)
 ```
 
-### Monthly fluxes 1984-2024
-```{r, echo=FALSE, width="100%", fig.height=unit(16,"cm")}
+<!-- ### Monthly fluxes 1984-2022 -->
+<!-- ```{r, echo=FALSE, width="100%", fig.height=unit(16,"cm")} -->
 
-# Peak at the variability 
+<!-- # Peak at the variability  -->
 
-monthly_LochO_flux %>%
-  filter(waterYear >= 1984 & waterYear <= 2024) %>%
-  mutate(month = factor(month, levels=c("June","July","August"))) %>%
-  ggplot(aes(x=waterYear, y=flux_kg_per_ha_year, color=chem_name))+
-  geom_point()+
-  geom_line()+
-  facet_wrap(~chem_name, scales="free_y")+
-  facet_wrap(chem_name~month, scales="free_y", ncol=3)+
-  theme_few(base_size = 24)
-```
+<!-- chem_data %>% -->
+<!--   filter(waterYear >= 1984 & waterYear <= 2024) %>% -->
+<!--   ggplot(aes(x=waterYear, y=june_flux_kg_per_ha, color=chem_name))+ -->
+<!--   geom_point()+ -->
+<!--   geom_line()+ -->
+<!--   facet_wrap(~chem_name, scales="free_y")+ -->
+<!--   theme_few(base_size = 24)+ -->
+<!--   labs(title="June") -->
 
+<!-- chem_data %>% -->
+<!--   filter(waterYear >= 1991 & waterYear <= 2024) %>% -->
+<!--   ggplot(aes(x=waterYear, y=july_flux_kg_per_ha, color=chem_name))+ -->
+<!--   geom_point()+ -->
+<!--   geom_line()+ -->
+<!--   facet_wrap(~chem_name, scales="free_y")+ -->
+<!--   theme_few(base_size = 24)+ -->
+<!--   labs(title="July") -->
+
+<!-- chem_data %>% -->
+<!--   filter(waterYear >= 1991 & waterYear <= 2024) %>% -->
+<!--   ggplot(aes(x=waterYear, y=august_flux_kg_per_ha, color=chem_name))+ -->
+<!--   geom_point()+ -->
+<!--   geom_line()+ -->
+<!--   facet_wrap(~chem_name, scales="free_y")+ -->
+<!--   theme_few(base_size = 24)+ -->
+<!--   labs(title="August") -->
+<!-- ``` -->
+
+<!-- ### Summer fluxes 1984-2022 -->
+<!-- ```{r, echo=FALSE, width="100%", fig.height=unit(16,"cm")} -->
+
+<!-- # Peak at the variability  -->
+
+<!-- chem_data %>% -->
+<!--   filter(waterYear >= 1984 & waterYear <= 2022) %>% -->
+<!--   ggplot(aes(x=waterYear, y=summer_flux_kg_per_ha, color=chem_name))+ -->
+<!--   geom_point()+ -->
+<!--   geom_line()+ -->
+<!--   facet_wrap(~chem_name, scales="free_y")+ -->
+<!--   theme_few(base_size = 24)+ -->
+<!--   labs(title="Summer (JJA)") -->
+<!-- ``` -->

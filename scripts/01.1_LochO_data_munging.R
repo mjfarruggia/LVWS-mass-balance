@@ -239,10 +239,10 @@ outlet_raw %>%
 
 ## WEEKLY flux esimates instead
 # 
-# outlet_raw_weekly <- LochO_chem %>%
-#   left_join(., LochQ %>% select(date, Q_m3s), by=c("DATE"="date","waterYear")) %>%
-#   left_join(., percentile_days %>% select(waterYear, day_20th_wydoy:day_80th_wydoy), by="waterYear") %>%
-#   mutate(wy_doy = hydro.day(DATE))
+outlet_raw_weekly <- LochO_chem %>%
+  left_join(., LochQ %>% select(date, Q_m3s), by=c("DATE"="date","waterYear")) %>%
+  left_join(., percentile_days %>% select(waterYear, day_20th_wydoy:day_80th_wydoy), by="waterYear") %>%
+  mutate(wy_doy = hydro.day(DATE))
 # 
 # outlet_weekly_flux <- outlet_raw_weekly %>%
 #   filter(waterYear <= 2021) %>%
@@ -296,8 +296,8 @@ outlet_raw %>%
 
 outlet_weekly_flux2 <- LochO_chem %>%
   filter(waterYear >= 1984 & waterYear <= 2021) %>%
-  mutate(cations_mgL = CA + MG + SODIUM + K,
-         inorganicN_mgL = NO3_calc + NH4_calc) %>%
+  mutate(cations_mgL = CA + MG + SODIUM + K) %>%
+         # inorganicN_mgL = NO3_calc + NH4_calc) %>%
   # mutate(
   #   # Convert individual ions to µeq/L
   #   calcium_ueqL = (CA / 20.04) * 1000,
@@ -310,8 +310,8 @@ outlet_weekly_flux2 <- LochO_chem %>%
   # ) %>%
   # select(-c(CA, MG, SODIUM, K)) %>%
   # If there are multiple samples in a week, just get the mean
-  select(DATE, waterYear, SO4, cations_mgL, NH4_calc, NO3_calc, inorganicN_mgL, SiO2) %>%
-  pivot_longer(c(SO4, cations_mgL, NH4_calc, NO3_calc, inorganicN_mgL, SiO2),
+  select(DATE, waterYear, SO4, cations_mgL, NH4_calc, NO3_calc, SiO2) %>%
+  pivot_longer(c(SO4, cations_mgL, NH4_calc, NO3_calc, SiO2),
                names_to = "chem_name",
                values_to = "chem_value") %>% #units for all are mg/L
   # group_by(chem_name, waterYear, weekofyear) %>% 
@@ -329,9 +329,10 @@ outlet_weekly_flux2 <- LochO_chem %>%
   mutate(chem_name = case_match(
     chem_name,
     "cations_mgL" ~ "cations",
-    "inorganicN_mgL" ~ "inorganic N",
-    "NH4_calc" ~ "NH4",
-    "NO3_calc" ~ "NO3",
+    # "inorganicN_mgL" ~ "inorganic N",
+    "NH4_calc" ~ "NH4-N",
+    "NO3_calc" ~ "NO3-N",
+    "SO4" ~ "SO4-S",
     .default = chem_name
   )) %>%
   distinct(DATE, chem_name, .keep_all = TRUE) %>%

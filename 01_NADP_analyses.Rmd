@@ -20,7 +20,7 @@ source("scripts/00_functions.R")
 source("scripts/00_libraries.R")
 source("scripts/01.1_LochO_data_munging.R")
 source("scripts/01.2_Bear_Lake_SNOTEL.R")
-source("scripts/01.3_NADP_CO98.R")
+source(here("scripts/01.3_NADP_CO98.R"))
 knitr::opts_chunk$set(fig.width=unit(18,"cm"), fig.height=unit(11,"cm"))
 ```
 
@@ -29,7 +29,8 @@ Data are missing throughout, unsurprisingly, but there are a few time periods th
 I will exclude them for the initial trend analysis because they are biased low.
 ```{r, echo=FALSE}
 vis_miss(NADP%>%
-           select(waterYear, weekofyear, subppt_mm, Ca_mgL, Mg_mgL, K_mgL, NH4_mgL, NO3_mgL, SO4_mgL, Na_mgL) %>%
+           select(waterYear, weekofyear, subppt_mm, ppt_mm_bret, Ca_mgL, Mg_mgL, K_mgL, NH4_mgL, NO3_mgL, SO4_mgL, Na_mgL,
+                  NO3_mgL_bret, NH4_mgL_bret, IN_mgL_bret) %>%
            filter(waterYear=="1986"))
 
 ```
@@ -38,7 +39,8 @@ vis_miss(NADP%>%
 #Visualize missing data with naniar package
 vis_dat(NADP)
 vis_miss(NADP%>%
-           select(waterYear, weekofyear, subppt_mm, Ca_mgL, Mg_mgL, K_mgL, NH4_mgL, NO3_mgL, SO4_mgL, Na_mgL))
+           select(waterYear, weekofyear, subppt_mm, ppt_mm_bret, Ca_mgL, Mg_mgL, K_mgL, NH4_mgL, NO3_mgL, SO4_mgL, Na_mgL,
+                  NO3_mgL_bret, NH4_mgL_bret, IN_mgL_bret))
 
 #We are missing a ton of data in 1986 so the interpolations will still underestimate.
 #Remove for trend analyses?
@@ -47,26 +49,32 @@ ggplot(NADP,
        aes(x = weekofyear, 
            y = NO3_mgL)) + 
   geom_miss_point() +
-  facet_wrap(~waterYear)
+  facet_wrap(~waterYear)+
+  labs(title="Raw NADP data")
 
-NADP_trim <- NADP %>%
-  select(waterYear, weekofyear, subppt_mm, Ca_mgL, Mg_mgL, K_mgL, NH4_mgL, NO3_mgL, SO4_mgL, Na_mgL) %>%
-  mutate(cations_mgL = Ca_mgL + Mg_mgL + Na_mgL + K_mgL,
-         inorganicN_mgL = NH4_mgL + NO3_mgL) %>%
-  select(-c(Ca_mgL, Mg_mgL, Na_mgL, K_mgL)) %>%
-  pivot_longer(-c(1:3),
-               names_to = "deposition_name",
-               values_to = "deposition_value_mg_L") %>%
-  mutate(rainwater_m3 = (subppt_mm/1000)*loch_ws_size_m2, # over the entire watershed that week
-         deposition_value_kg_m3 = deposition_value_mg_L / 1e+3, # Convert  concentration from mg/L to kg/m³
-         deposition_kg = rainwater_m3 * deposition_value_kg_m3, #kg across the time period (a week in this case)
-         deposition_kg_per_ha = deposition_kg/660) 
+ggplot(NADP, 
+       aes(x = weekofyear, 
+           y = NO3_mgL_bret)) + 
+  geom_miss_point() +
+  facet_wrap(~waterYear)+
+  labs(title="Bret's NADP data")
+
+# NADP_trim <- NADP %>%
+#   select(waterYear, weekofyear, ppt_mm_bret, Ca_mgL, Mg_mgL, K_mgL, NH4_mgL_bret, NO3_mgL_bret, IN_mgL_bret, SO4_mgL, Na_mgL) %>%
+#   mutate(cations_mgL = Ca_mgL + Mg_mgL + Na_mgL + K_mgL) %>%
+#   select(-c(Ca_mgL, Mg_mgL, Na_mgL, K_mgL)) %>%
+#   pivot_longer(-c(1:3),
+#                names_to = "deposition_name",
+#                values_to = "deposition_value_mg_L") %>%
+#   mutate(rainwater_m3 = (ppt_mm_bret/1000)*loch_ws_size_m2, # over the entire watershed that week
+#          deposition_value_kg_m3 = deposition_value_mg_L / 1e+3, # Convert  concentration from mg/L to kg/m³
+#          deposition_kg = rainwater_m3 * deposition_value_kg_m3, #kg across the time period (a week in this case)
+#          deposition_kg_per_ha = deposition_kg/660) 
 
 #Annual dep
 annual_dep <- NADP %>%
-  select(waterYear, weekofyear, subppt_mm, Ca_mgL, Mg_mgL, K_mgL, NH4_mgL, NO3_mgL, SO4_mgL, Na_mgL) %>%
-  mutate(cations_mgL = Ca_mgL + Mg_mgL + Na_mgL + K_mgL,
-         inorganicN_mgL = NH4_mgL + NO3_mgL) %>%
+  select(waterYear, weekofyear, ppt_mm_bret, Ca_mgL, Mg_mgL, K_mgL, NH4_mgL_bret, NO3_mgL_bret, IN_mgL_bret, SO4_mgL, Na_mgL) %>%
+  mutate(cations_mgL = Ca_mgL + Mg_mgL + Na_mgL + K_mgL) %>%
   select(-c(Ca_mgL, Mg_mgL, Na_mgL, K_mgL)) %>%
   pivot_longer(-c(1:3),
                names_to = "deposition_name",
@@ -77,9 +85,23 @@ annual_dep <- NADP %>%
   as_tsibble(., key = c(deposition_name,waterYear), index = weekofyear) %>% #time series tibble
   fill_gaps() %>%
   #impute missing data
-  mutate(subppt_mm = imputeTS::na_interpolation(subppt_mm, maxgap = 2),
+  mutate(deposition_name = case_match(
+    deposition_name,
+    "cations_mgL" ~ "cations",
+    # "inorganicN_mgL" ~ "inorganic N",
+    "NH4_mgL_bret" ~ "NH4-N",
+    "NO3_mgL_bret" ~ "NO3-N",
+    "SO4_mgL" ~ "SO4-S",
+    "IN_mgL_bret" ~ "Inorganic N",
+    .default = deposition_name
+  )) %>%
+  mutate(deposition_value_mg_L = case_when(deposition_name == "NO3-N" ~ deposition_value_mg_L * 0.226,
+                                deposition_name == "NH4-N" ~ deposition_value_mg_L * 0.777,
+                                deposition_name == "SO4-S" ~ deposition_value_mg_L * 0.333,
+                                TRUE ~ deposition_value_mg_L)) %>%
+  mutate(ppt_mm_bret = imputeTS::na_interpolation(ppt_mm_bret, maxgap = 2),
          deposition_value_mg_L = imputeTS::na_interpolation(deposition_value_mg_L, maxgap = 2),
-         rainwater_m3 = (subppt_mm/1000)*loch_ws_size_m2, # over the entire watershed that week
+         rainwater_m3 = (ppt_mm_bret/1000)*loch_ws_size_m2, # over the entire watershed that week
          deposition_value_kg_m3 = deposition_value_mg_L / 1e+3, # Convert  concentration from mg/L to kg/m³
          deposition_kg = rainwater_m3 * deposition_value_kg_m3, #kg across the time period (a week in this case)
          deposition_kg_per_ha = deposition_kg/660) %>%
@@ -89,9 +111,8 @@ annual_dep <- NADP %>%
 
 #Monthly dep (June-Aug)
 monthly_dep <- NADP %>%
-  select(waterYear, weekofyear, subppt_mm, Ca_mgL, Mg_mgL, K_mgL, NH4_mgL, NO3_mgL, SO4_mgL, Na_mgL) %>%
-  mutate(cations_mgL = Ca_mgL + Mg_mgL + Na_mgL + K_mgL,
-         inorganicN_mgL = NH4_mgL + NO3_mgL) %>%
+  select(waterYear, weekofyear, ppt_mm_bret, Ca_mgL, Mg_mgL, K_mgL, NH4_mgL_bret, NO3_mgL_bret, IN_mgL_bret, SO4_mgL, Na_mgL) %>%
+  mutate(cations_mgL = Ca_mgL + Mg_mgL + Na_mgL + K_mgL) %>%
   select(-c(Ca_mgL, Mg_mgL, Na_mgL, K_mgL)) %>%
   pivot_longer(-c(1:3),
                names_to = "deposition_name",
@@ -102,9 +123,23 @@ monthly_dep <- NADP %>%
   as_tsibble(., key = c(deposition_name,waterYear), index = weekofyear) %>% #time series tibble
   fill_gaps() %>%
   #impute missing data
-  mutate(subppt_mm = imputeTS::na_interpolation(subppt_mm, maxgap = 2),
+  mutate(deposition_name = case_match(
+    deposition_name,
+    "cations_mgL" ~ "cations",
+    # "inorganicN_mgL" ~ "inorganic N",
+    "NH4_mgL_bret" ~ "NH4-N",
+    "NO3_mgL_bret" ~ "NO3-N",
+    "SO4_mgL" ~ "SO4-S",
+    "IN_mgL_bret" ~ "Inorganic N",
+    .default = deposition_name
+  )) %>%
+  mutate(deposition_value_mg_L = case_when(deposition_name == "NO3-N" ~ deposition_value_mg_L * 0.226,
+                                deposition_name == "NH4-N" ~ deposition_value_mg_L * 0.777,
+                                deposition_name == "SO4-S" ~ deposition_value_mg_L * 0.333,
+                                TRUE ~ deposition_value_mg_L)) %>%
+  mutate(ppt_mm_bret = imputeTS::na_interpolation(ppt_mm_bret, maxgap = 2),
          deposition_value_mg_L = imputeTS::na_interpolation(deposition_value_mg_L, maxgap = 2),
-         rainwater_m3 = (subppt_mm/1000)*loch_ws_size_m2, # over the entire watershed that week
+         rainwater_m3 = (ppt_mm_bret/1000)*loch_ws_size_m2, # over the entire watershed that week
          deposition_value_kg_m3 = deposition_value_mg_L / 1e+3, # Convert  concentration from mg/L to kg/m³
          deposition_kg = rainwater_m3 * deposition_value_kg_m3, #kg across the time period (a week in this case)
          deposition_kg_per_ha = deposition_kg/660) %>%
@@ -119,9 +154,8 @@ monthly_dep <- NADP %>%
 
 #Summer dep (June-Aug)
 summer_dep <- NADP %>%
-  select(waterYear, weekofyear, subppt_mm, Ca_mgL, Mg_mgL, K_mgL, NH4_mgL, NO3_mgL, SO4_mgL, Na_mgL) %>%
-  mutate(cations_mgL = Ca_mgL + Mg_mgL + Na_mgL + K_mgL,
-         inorganicN_mgL = NH4_mgL + NO3_mgL) %>%
+  select(waterYear, weekofyear, ppt_mm_bret, Ca_mgL, Mg_mgL, K_mgL, NH4_mgL_bret, NO3_mgL_bret, IN_mgL_bret, SO4_mgL, Na_mgL) %>%
+  mutate(cations_mgL = Ca_mgL + Mg_mgL + Na_mgL + K_mgL) %>%
   select(-c(Ca_mgL, Mg_mgL, Na_mgL, K_mgL)) %>%
   pivot_longer(-c(1:3),
                names_to = "deposition_name",
@@ -132,9 +166,23 @@ summer_dep <- NADP %>%
   as_tsibble(., key = c(deposition_name,waterYear), index = weekofyear) %>% #time series tibble
   fill_gaps() %>%
   #impute missing data
-  mutate(subppt_mm = imputeTS::na_interpolation(subppt_mm, maxgap = 2),
+  mutate(deposition_name = case_match(
+    deposition_name,
+    "cations_mgL" ~ "cations",
+    # "inorganicN_mgL" ~ "inorganic N",
+    "NH4_mgL_bret" ~ "NH4-N",
+    "NO3_mgL_bret" ~ "NO3-N",
+    "SO4_mgL" ~ "SO4-S",
+    "IN_mgL_bret" ~ "Inorganic N",
+    .default = deposition_name
+  )) %>%
+  mutate(deposition_value_mg_L = case_when(deposition_name == "NO3-N" ~ deposition_value_mg_L * 0.226,
+                                deposition_name == "NH4-N" ~ deposition_value_mg_L * 0.777,
+                                deposition_name == "SO4-S" ~ deposition_value_mg_L * 0.333,
+                                TRUE ~ deposition_value_mg_L)) %>%
+  mutate(ppt_mm_bret = imputeTS::na_interpolation(ppt_mm_bret, maxgap = 2),
          deposition_value_mg_L = imputeTS::na_interpolation(deposition_value_mg_L, maxgap = 2),
-         rainwater_m3 = (subppt_mm/1000)*loch_ws_size_m2, # over the entire watershed that week
+         rainwater_m3 = (ppt_mm_bret/1000)*loch_ws_size_m2, # over the entire watershed that week
          deposition_value_kg_m3 = deposition_value_mg_L / 1e+3, # Convert  concentration from mg/L to kg/m³
          deposition_kg = rainwater_m3 * deposition_value_kg_m3, #kg across the time period (a week in this case)
          deposition_kg_per_ha = deposition_kg/660) %>%
@@ -153,13 +201,13 @@ summer_dep <- NADP %>%
 
 ## Plots
 
-### Annual deposition rates 1991-2024
+### Annual deposition rates 1991-2022
 ```{r, echo=FALSE}
 
 # Peak at the variability 
 
 annual_dep %>%
-  filter(waterYear >= 1991 & waterYear <= 2024) %>%
+  filter(waterYear >= 1991 & waterYear < 2023) %>%
   ggplot(aes(x=waterYear, y=deposition_kg_per_ha_impute, color=deposition_name))+
   geom_point()+
   geom_line()+
@@ -167,11 +215,12 @@ annual_dep %>%
   theme_few(base_size = 22)
 ```
 
-### Monthly deposition rates (1984-2024)
-```{r, echo=FALSE}
+### Monthly deposition rates (1984-2022)
+```{r, echo=FALSE, width="100%", fig.height=unit(16,"cm")}
+
 
 monthly_dep %>%
-  filter(waterYear >= 1984 & waterYear <= 2024) %>%
+  filter(waterYear >= 1984 & waterYear <= 2022) %>%
   mutate(month = factor(month, levels=c("June","July","August"))) %>%
   ggplot(aes(x=waterYear, y=deposition_kg_per_ha_impute, color=month))+
   geom_point()+
@@ -180,15 +229,92 @@ monthly_dep %>%
   theme_few(base_size = 22)
 ```
 
-### Summer deposition rates (1984-2024)
+### Summer deposition rates (1984-2022)
 ```{r, echo=FALSE}
 
 summer_dep %>%
-  filter(waterYear >= 1984 & waterYear <= 2024) %>%
+  filter(waterYear >= 1984 & waterYear <= 2022) %>%
   ggplot(aes(x=waterYear, y=deposition_kg_per_ha_impute, color=deposition_name))+
   geom_point()+
   geom_line()+
   facet_wrap(~deposition_name, scales="free_y")+
   theme_few(base_size = 22)
 
+```
+
+### Test for annual deposition trends
+
+Demo of what's happening under the hood -- run the M-K test, and if significant extract the Sens slope and intercept.
+
+```{r, echo=FALSE}
+
+#Here is what's happening under the hood
+N_dep_annual <- annual_dep %>%
+  filter(deposition_name=="Inorganic N") %>%
+  filter(waterYear > 1984 & waterYear < 2024)
+# test the data for normality
+hist(N_dep_annual$deposition_kg_per_ha_impute, breaks = 30)
+# but let's use a Shapiro test to check for real
+shapiro.test(N_dep_annual$deposition_kg_per_ha_impute)  
+#P-value is below .05, therefore we reject the null hypothesis of a normal distrubution.
+
+# We can turned to the Mann-Kendall trend test, which is non-parametric, not requiring a normal dist
+# this only tells us if there is a significant trend, not the estimated slope
+mk_results <-trend::mk.test(N_dep_annual$deposition_kg_per_ha_impute)
+print(mk_results) # significant
+
+# for a slope estimate we uses the Sen's slope function
+sens_result <-trend::sens.slope(N_dep_annual$deposition_kg_per_ha_impute)
+print(sens_result)
+slope_est <-as.numeric(sens_result[[1]]) # slope estimate
+
+# the trend package only gives us slope, not a y-int estimate for plotting
+# we'll use the zyp package for that
+y_int_results <-zyp::zyp.sen(deposition_kg_per_ha_impute ~ waterYear, N_dep_annual) # y comes first!!
+print(y_int_results) # inspect
+y_int <-y_int_results$coefficients[[1]] # pull out y-int estimate for ploting
+
+ggplot(N_dep_annual, aes(y = deposition_kg_per_ha_impute, x = waterYear)) +
+  geom_point(col = "red")+
+  # use info from our MK and Sen's test to graph the trend line
+  geom_abline(intercept = y_int, slope = slope_est, color="blue", size=1.2) +
+  labs(title="Annual N deposition MK Trend", 
+       y="Inorganic N (kg/ha)", x="Water Year")
+```
+
+
+```{r, echo=FALSE, include=FALSE}
+#The sens slope p-value matches M-K so I built a workshop that just uses the sens slope and then the zyp package to get a y-intercept
+dep_trends_nested <- annual_dep %>%
+  rename(value=deposition_kg_per_ha_impute) %>%
+  filter(waterYear > 1984 & waterYear < 2024) %>%
+  group_by(deposition_name) %>%
+  nest() %>%
+  mutate(
+    sens = map(data, map_sens),
+    sens_sum = map(sens, broom::glance),
+    slope = map(sens, sens_slope),
+    zyp_mod = map(data, map_zyp),
+    intercept = map(zyp_mod, sens_intercept)
+  )
+
+
+## Un-nest 
+dep_trends_unnested = unnest(dep_trends_nested, c(sens_sum, slope, deposition_name)) %>%
+  mutate(
+    trend = case_when(
+      p.value <= 0.05 & slope >= 0 ~ 'increasing',
+      p.value <= 0.05 & slope <= 0 ~ 'decreasing',
+      p.value > 0.05 ~ 'no trend'
+    ),
+    trend = factor(trend,
+                       levels = c('no trend',
+                                  'increasing',
+                                  'decreasing'))
+  )
+
+#Extract all covariates for modeling...
+print(dep_trends_slopes_wide <- dep_trends_unnested %>%
+  select(deposition_name, slope, p.value, trend) %>%
+  unnest(c(slope)))
 ```

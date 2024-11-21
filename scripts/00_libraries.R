@@ -32,7 +32,8 @@ pacman::p_load("lubridate",
                "naniar",
                "tsibble",
                "visdat",
-               "trend")
+               "trend",
+               "zyp")
 
 #Use renv for version control.  Beginner guide here:
 # https://rstudio.github.io/renv/articles/renv.html

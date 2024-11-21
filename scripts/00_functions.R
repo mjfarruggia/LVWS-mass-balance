@@ -9,3 +9,29 @@ hydro.day = function(x, start.month = 10L) {
 
 
 loch_ws_size_m2 <- 6.6e+6
+
+
+##########################################################################################
+##Functions for calculating sens slopes and intercepts for plotting later
+##########################################################################################
+map_sens <- function(df) {
+  sens.slope(df$value)
+}
+
+
+sens_slope <- function(mod) {
+  mod$estimate[[1]]
+}
+
+#https://kevintshoemaker.github.io/NRES-746/TimeSeries_all.html
+#For getting sens intercept, helpful for plotting later
+map_zyp <- function(df) {
+  zyp::zyp.sen(value ~ waterYear, df)
+  # sens.slope(df$mean)
+}
+
+
+sens_intercept <- function(mod) {
+  mod$coefficients[[1]] # pull out y-int estimate for ploting
+}
+

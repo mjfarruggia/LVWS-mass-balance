@@ -458,5 +458,5 @@ annual_RP %>%
   geom_hline(yintercept=1, color="grey", linetype="dashed")+
   geom_col()+
   coord_cartesian(clip = "off") +
-  geom_text_repel(box.padding = 0.5, max.overlaps = 1)
+  geom_text_repel(box.padding = 0.5, max.overlaps = 1) 
 

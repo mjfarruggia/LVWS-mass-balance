@@ -1,5 +1,5 @@
 ---
-title: "outlet_trend_analysis"
+title: "Loch outlet flux analysis"
 author: "Bella Oleksy"
 date: "2024-11-19"
 output: html_document
@@ -70,64 +70,227 @@ outlet_weekly_flux %>%
 
 Summer data are robust 1991-2022
 
+
+
+### Test for annual export trends
+
+Mann-Kendell test with Sens Slope
+
+```{r, echo=FALSE}
+
+##ANNUAL
+annual_export_trends_nested <- annual_flux %>%
+  rename(value=annual_flux_kg_per_ha) %>%
+  filter(waterYear >= 1991 & waterYear <= 2022) %>%
+  group_by(chem_name) %>%
+  nest() %>%
+  mutate(
+    sens = map(data, map_sens),
+    sens_sum = map(sens, broom::glance),
+    slope = map(sens, sens_slope),
+    zyp_mod = map(data, map_zyp),
+    intercept = map(zyp_mod, sens_intercept)
+  )
+
+
+## Un-nest 
+annual_export_trends_unnested = unnest(annual_export_trends_nested, c(sens_sum, slope, chem_name)) %>%
+  mutate(
+    trend = case_when(
+      p.value <= 0.05 & slope >= 0 ~ 'increasing',
+      p.value <= 0.05 & slope <= 0 ~ 'decreasing',
+      p.value > 0.05 ~ 'no trend'
+    ),
+    trend = factor(trend,
+                       levels = c('no trend',
+                                  'increasing',
+                                  'decreasing'))
+  )
+
+#Extract all covariates for modeling...
+annual_export_trends <- annual_export_trends_unnested %>%
+  select(chem_name, slope, p.value, trend, intercept) %>%
+  unnest(c(slope)) %>%
+  mutate(time_frame = "annual")%>%
+  mutate(intercept = as.numeric(intercept))
+
+
+##MONTHLY
+monthly_export <- bind_rows( june_flux %>%
+  select(-june_flux_kg) %>%
+  mutate(month="June") %>%
+  rename(value=june_flux_kg_per_ha),
+  july_flux %>%
+  select(-july_flux_kg) %>%
+  mutate(month="July") %>%
+  rename(value=july_flux_kg_per_ha),
+  august_flux %>%
+  select(-august_flux_kg) %>%
+  mutate(month="August") %>%
+  rename(value=august_flux_kg_per_ha))
+
+
+monthly_export_trends_nested <- monthly_export %>%
+  filter(waterYear > 1984 & waterYear < 2023) %>%
+  group_by(chem_name, month) %>%
+  nest() %>%
+  mutate(
+    sens = map(data, map_sens),
+    sens_sum = map(sens, broom::glance),
+    slope = map(sens, sens_slope),
+    zyp_mod = map(data, map_zyp),
+    intercept = map(zyp_mod, sens_intercept)
+  )
+
+
+## Un-nest 
+monthly_export_trends_unnested = unnest(monthly_export_trends_nested, c(sens_sum, slope, chem_name, month)) %>%
+  mutate(
+    trend = case_when(
+      p.value <= 0.05 & slope >= 0 ~ 'increasing',
+      p.value <= 0.05 & slope <= 0 ~ 'decreasing',
+      p.value > 0.05 ~ 'no trend'
+    ),
+    trend = factor(trend,
+                       levels = c('no trend',
+                                  'increasing',
+                                  'decreasing'))
+  )
+
+#Extract all covariates for modeling...
+monthly_export_trends <- monthly_export_trends_unnested %>%
+  select(chem_name, month, slope, p.value, trend, intercept) %>%
+  unnest(c(slope)) %>%
+  rename(time_frame=month)%>%
+  mutate(intercept = as.numeric(intercept))
+
+
+##SUMMER
+
+summer_export_trends_nested <- summer_flux %>%
+  rename(value=summer_flux_kg_per_ha) %>%
+  filter(waterYear > 1984 & waterYear <= 2022) %>%
+  group_by(chem_name) %>%
+  nest() %>%
+  mutate(
+    sens = map(data, map_sens),
+    sens_sum = map(sens, broom::glance),
+    slope = map(sens, sens_slope),
+    zyp_mod = map(data, map_zyp),
+    intercept = map(zyp_mod, sens_intercept)
+  )
+
+
+## Un-nest 
+summer_export_trends_unnested = unnest(summer_export_trends_nested, c(sens_sum, slope, chem_name)) %>%
+  mutate(
+    trend = case_when(
+      p.value <= 0.05 & slope >= 0 ~ 'increasing',
+      p.value <= 0.05 & slope <= 0 ~ 'decreasing',
+      p.value > 0.05 ~ 'no trend'
+    ),
+    trend = factor(trend,
+                       levels = c('no trend',
+                                  'increasing',
+                                  'decreasing'))
+  )
+
+#Extract all covariates for modeling...
+summer_export_trends <- summer_export_trends_unnested %>%
+  select(chem_name, slope, p.value, trend, intercept) %>%
+  unnest(c(slope)) %>%
+  mutate(time_frame = "summer") %>%
+  mutate(intercept = as.numeric(intercept))
+
+
+all_export_trends <- bind_rows(annual_export_trends,
+                            summer_export_trends,
+                            monthly_export_trends) %>%
+  mutate(slope = round(slope, 3),
+         p.value = round(p.value,4),
+         p.value = case_when(p.value < 0.001 ~ "<0.001",
+                             TRUE ~ as.character(p.value))) 
+
+all_export_trends_hux <- 
+  hux(all_export_trends) %>% 
+  # add_colnames() %>% 
+  set_bold(row = 1, col = everywhere, value = TRUE) %>% 
+  set_all_borders(TRUE) 
+
+theme_plain(all_export_trends_hux)
+quick_docx(all_export_trends_hux, file = 'figures/Table2_outlet_export_trends.docx')
+
+```
+
 ## Plots
 
 ### Annual fluxes 1991-2022
-```{r, echo=FALSE, width="100%"}
-# Peak at the variability 
+
+There is only a trend line on the plot if p < 0.05.
+
+```{r, echo=FALSE, warning=FALSE}
+
 annual_flux %>%
   filter(waterYear >= 1991 & waterYear <= 2024) %>%
-  ggplot(aes(x=waterYear, y=annual_flux_kg_per_ha, color=chem_name))+
-  geom_point()+
-  geom_line()+
+  ggplot(aes(x=waterYear, y=annual_flux_kg_per_ha, fill=chem_name, group=chem_name))+
+  geom_point(size=4, shape=21)+ 
   facet_wrap(~chem_name, scales="free_y")+
-  theme_few(base_size = 24)
+  theme_few(base_size = 24)+
+  geom_abline(data = annual_export_trends %>% filter(!trend=="no trend"), aes(intercept = intercept, slope = slope),
+              col = "black",
+              linewidth=1.5) +
+  labs(y="Flux (kg/ha/year)",
+       x="Year",
+       title="Annual") +
+  theme(legend.position = "none")+
+  scale_color_manual(values=chemCols,
+                     "Fit")+
+  scale_fill_manual(values=chemCols,
+                    name="Observed")
 ```
 
 ### Monthly fluxes 1984-2022
-```{r, echo=FALSE, width="100%", fig.height=unit(16,"cm")}
 
-# Peak at the variability
+There is only a trend line on the plot if p < 0.05.
 
-june_flux %>%
-  filter(waterYear >= 1984 & waterYear <= 2024) %>%
-  ggplot(aes(x=waterYear, y=june_flux_kg_per_ha, color=chem_name))+
-  geom_point()+
-  geom_line()+
+```{r, echo=FALSE, warning=FALSE}
+
+monthly_export %>%
+  filter(waterYear > 1984 & waterYear < 2023) %>%
+  ggplot(aes(x=waterYear, y=value, fill=month, group=month))+
+  geom_point(size=4, shape=21)+ 
   facet_wrap(~chem_name, scales="free_y")+
   theme_few(base_size = 24)+
-  labs(title="June")
-
-july_flux %>%
-  filter(waterYear >= 1991 & waterYear <= 2024) %>%
-  ggplot(aes(x=waterYear, y=july_flux_kg_per_ha, color=chem_name))+
-  geom_point()+
-  geom_line()+
-  facet_wrap(~chem_name, scales="free_y")+
-  theme_few(base_size = 24)+
-  labs(title="July")
-
-august_flux %>%
-  filter(waterYear >= 1991 & waterYear <= 2024) %>%
-  ggplot(aes(x=waterYear, y=august_flux_kg_per_ha, color=chem_name))+
-  geom_point()+
-  geom_line()+
-  facet_wrap(~chem_name, scales="free_y")+
-  theme_few(base_size = 24)+
-  labs(title="August")
+  geom_abline(data = monthly_export_trends %>% rename(month=time_frame) %>%filter(!trend=="no trend"), aes(intercept = intercept, slope = slope, color=month),
+              linewidth=1.5) +
+  labs(y="Flux (kg/ha/year)",
+       x="Year",
+       title="Monthly") +
+  scale_color_manual(values=monthCols,
+                     "Fit")+
+  scale_fill_manual(values=monthCols,
+                    name="Observed")
 ```
 
 ### Summer fluxes 1984-2022
-```{r, echo=FALSE, width="100%", fig.height=unit(16,"cm")}
 
-# Peak at the variability
+There is only a trend line on the plot if p < 0.05.
+
+```{r, echo=FALSE, warning=FALSE}
 
 summer_flux %>%
-  filter(waterYear >= 1984 & waterYear <= 2022) %>%
-  ggplot(aes(x=waterYear, y=summer_flux_kg_per_ha, color=chem_name))+
-  geom_point()+
-  geom_line()+
+  filter(waterYear > 1984 & waterYear < 2023) %>%
+  ggplot(aes(x=waterYear, y=summer_flux_kg_per_ha, fill=chem_name, group=chem_name))+
+  geom_point(size=4, shape=21)+ 
   facet_wrap(~chem_name, scales="free_y")+
   theme_few(base_size = 24)+
-  labs(title="Summer (JJA)")
+  geom_abline(data = summer_export_trends %>%filter(!trend=="no trend"), aes(intercept = intercept, slope = slope, color=chem_name),
+              linewidth=1.5) +
+  labs(y="Flux (kg/ha/year)",
+       x="Year",
+       title="Summer (JJA)") +
+  scale_color_manual(values=chemCols,
+                     "Fit")+
+  scale_fill_manual(values=chemCols,
+                    name="Observed")
 ```

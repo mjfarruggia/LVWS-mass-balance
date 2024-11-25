@@ -9,7 +9,7 @@ output: html_document
 # Some notes at the top about data processing
 
 <b>Interpolation method--</b>
-- In the future we'll want to (I think) mirror the method by Bret A. Schichtel et al. 2019 Sci Tot Env. Here, I am linearlly interpolated for periods of missing data with gaps no more than 2 weeks apart 
+-  Here, I am linearlly interpolated for periods of missing data with gaps no more than 2 weeks apart. I am using the NO3, NH4, Total IN, and precip values from  Bret A. Schichtel et al. 2019 Sci Tot Env.
 
 <b>Year vs. water year--</b>
 Aggregating data on an annual basis instead of WY. Just flagging that in case we switch to WY later.
@@ -20,8 +20,10 @@ source("scripts/00_functions.R")
 source("scripts/00_libraries.R")
 source("scripts/01.1_LochO_data_munging.R")
 source("scripts/01.2_Bear_Lake_SNOTEL.R")
-source(here("scripts/01.3_NADP_CO98.R"))
-knitr::opts_chunk$set(fig.width=unit(18,"cm"), fig.height=unit(11,"cm"))
+source("scripts/01.3_NADP_CO98.R")
+knitr::opts_chunk$set(fig.width=18, fig.height=11)
+
+
 ```
 
 ## Missing data:
@@ -71,176 +73,10 @@ ggplot(NADP,
 #          deposition_kg = rainwater_m3 * deposition_value_kg_m3, #kg across the time period (a week in this case)
 #          deposition_kg_per_ha = deposition_kg/660) 
 
-#Annual dep
-annual_dep <- NADP %>%
-  select(waterYear, weekofyear, ppt_mm_bret, Ca_mgL, Mg_mgL, K_mgL, NH4_mgL_bret, NO3_mgL_bret, IN_mgL_bret, SO4_mgL, Na_mgL) %>%
-  mutate(cations_mgL = Ca_mgL + Mg_mgL + Na_mgL + K_mgL) %>%
-  select(-c(Ca_mgL, Mg_mgL, Na_mgL, K_mgL)) %>%
-  pivot_longer(-c(1:3),
-               names_to = "deposition_name",
-               values_to = "deposition_value_mg_L") %>%
-  # filter(deposition_name=="NO3_mgL") %>%
-  distinct(deposition_name, waterYear, weekofyear, .keep_all = TRUE) %>%
-  arrange(deposition_name,waterYear, weekofyear) %>%
-  as_tsibble(., key = c(deposition_name,waterYear), index = weekofyear) %>% #time series tibble
-  fill_gaps() %>%
-  #impute missing data
-  mutate(deposition_name = case_match(
-    deposition_name,
-    "cations_mgL" ~ "cations",
-    # "inorganicN_mgL" ~ "inorganic N",
-    "NH4_mgL_bret" ~ "NH4-N",
-    "NO3_mgL_bret" ~ "NO3-N",
-    "SO4_mgL" ~ "SO4-S",
-    "IN_mgL_bret" ~ "Inorganic N",
-    .default = deposition_name
-  )) %>%
-  mutate(deposition_value_mg_L = case_when(deposition_name == "NO3-N" ~ deposition_value_mg_L * 0.226,
-                                deposition_name == "NH4-N" ~ deposition_value_mg_L * 0.777,
-                                deposition_name == "SO4-S" ~ deposition_value_mg_L * 0.333,
-                                TRUE ~ deposition_value_mg_L)) %>%
-  mutate(ppt_mm_bret = imputeTS::na_interpolation(ppt_mm_bret, maxgap = 2),
-         deposition_value_mg_L = imputeTS::na_interpolation(deposition_value_mg_L, maxgap = 2),
-         rainwater_m3 = (ppt_mm_bret/1000)*loch_ws_size_m2, # over the entire watershed that week
-         deposition_value_kg_m3 = deposition_value_mg_L / 1e+3, # Convert  concentration from mg/L to kg/m³
-         deposition_kg = rainwater_m3 * deposition_value_kg_m3, #kg across the time period (a week in this case)
-         deposition_kg_per_ha = deposition_kg/660) %>%
-  as.data.frame() %>%
-  group_by(waterYear, deposition_name) %>%
-  summarize(deposition_kg_per_ha_impute = sum(deposition_kg_per_ha, na.rm=TRUE))
-
-#Monthly dep (June-Aug)
-monthly_dep <- NADP %>%
-  select(waterYear, weekofyear, ppt_mm_bret, Ca_mgL, Mg_mgL, K_mgL, NH4_mgL_bret, NO3_mgL_bret, IN_mgL_bret, SO4_mgL, Na_mgL) %>%
-  mutate(cations_mgL = Ca_mgL + Mg_mgL + Na_mgL + K_mgL) %>%
-  select(-c(Ca_mgL, Mg_mgL, Na_mgL, K_mgL)) %>%
-  pivot_longer(-c(1:3),
-               names_to = "deposition_name",
-               values_to = "deposition_value_mg_L") %>%
-  # filter(deposition_name=="NO3_mgL") %>%
-  distinct(deposition_name, waterYear, weekofyear, .keep_all = TRUE) %>%
-  arrange(deposition_name,waterYear, weekofyear) %>%
-  as_tsibble(., key = c(deposition_name,waterYear), index = weekofyear) %>% #time series tibble
-  fill_gaps() %>%
-  #impute missing data
-  mutate(deposition_name = case_match(
-    deposition_name,
-    "cations_mgL" ~ "cations",
-    # "inorganicN_mgL" ~ "inorganic N",
-    "NH4_mgL_bret" ~ "NH4-N",
-    "NO3_mgL_bret" ~ "NO3-N",
-    "SO4_mgL" ~ "SO4-S",
-    "IN_mgL_bret" ~ "Inorganic N",
-    .default = deposition_name
-  )) %>%
-  mutate(deposition_value_mg_L = case_when(deposition_name == "NO3-N" ~ deposition_value_mg_L * 0.226,
-                                deposition_name == "NH4-N" ~ deposition_value_mg_L * 0.777,
-                                deposition_name == "SO4-S" ~ deposition_value_mg_L * 0.333,
-                                TRUE ~ deposition_value_mg_L)) %>%
-  mutate(ppt_mm_bret = imputeTS::na_interpolation(ppt_mm_bret, maxgap = 2),
-         deposition_value_mg_L = imputeTS::na_interpolation(deposition_value_mg_L, maxgap = 2),
-         rainwater_m3 = (ppt_mm_bret/1000)*loch_ws_size_m2, # over the entire watershed that week
-         deposition_value_kg_m3 = deposition_value_mg_L / 1e+3, # Convert  concentration from mg/L to kg/m³
-         deposition_kg = rainwater_m3 * deposition_value_kg_m3, #kg across the time period (a week in this case)
-         deposition_kg_per_ha = deposition_kg/660) %>%
-  as.data.frame() %>%
-  mutate(month = case_when(weekofyear %in% c(23,24,25,26) ~ "June",
-                           weekofyear %in% c(27,28,29,30) ~ "July",
-                           weekofyear %in% c(31,32,33,34) ~ "August")) %>%
-  filter(month %in% c("June","July","August")) %>%
-  group_by(waterYear, month, deposition_name) %>%
-  summarize(deposition_kg_per_ha_impute = sum(deposition_kg_per_ha, na.rm=TRUE))
-
-
-#Summer dep (June-Aug)
-summer_dep <- NADP %>%
-  select(waterYear, weekofyear, ppt_mm_bret, Ca_mgL, Mg_mgL, K_mgL, NH4_mgL_bret, NO3_mgL_bret, IN_mgL_bret, SO4_mgL, Na_mgL) %>%
-  mutate(cations_mgL = Ca_mgL + Mg_mgL + Na_mgL + K_mgL) %>%
-  select(-c(Ca_mgL, Mg_mgL, Na_mgL, K_mgL)) %>%
-  pivot_longer(-c(1:3),
-               names_to = "deposition_name",
-               values_to = "deposition_value_mg_L") %>%
-  # filter(deposition_name=="NO3_mgL") %>%
-  distinct(deposition_name, waterYear, weekofyear, .keep_all = TRUE) %>%
-  arrange(deposition_name,waterYear, weekofyear) %>%
-  as_tsibble(., key = c(deposition_name,waterYear), index = weekofyear) %>% #time series tibble
-  fill_gaps() %>%
-  #impute missing data
-  mutate(deposition_name = case_match(
-    deposition_name,
-    "cations_mgL" ~ "cations",
-    # "inorganicN_mgL" ~ "inorganic N",
-    "NH4_mgL_bret" ~ "NH4-N",
-    "NO3_mgL_bret" ~ "NO3-N",
-    "SO4_mgL" ~ "SO4-S",
-    "IN_mgL_bret" ~ "Inorganic N",
-    .default = deposition_name
-  )) %>%
-  mutate(deposition_value_mg_L = case_when(deposition_name == "NO3-N" ~ deposition_value_mg_L * 0.226,
-                                deposition_name == "NH4-N" ~ deposition_value_mg_L * 0.777,
-                                deposition_name == "SO4-S" ~ deposition_value_mg_L * 0.333,
-                                TRUE ~ deposition_value_mg_L)) %>%
-  mutate(ppt_mm_bret = imputeTS::na_interpolation(ppt_mm_bret, maxgap = 2),
-         deposition_value_mg_L = imputeTS::na_interpolation(deposition_value_mg_L, maxgap = 2),
-         rainwater_m3 = (ppt_mm_bret/1000)*loch_ws_size_m2, # over the entire watershed that week
-         deposition_value_kg_m3 = deposition_value_mg_L / 1e+3, # Convert  concentration from mg/L to kg/m³
-         deposition_kg = rainwater_m3 * deposition_value_kg_m3, #kg across the time period (a week in this case)
-         deposition_kg_per_ha = deposition_kg/660) %>%
-  as.data.frame() %>%
-  mutate(month = case_when(weekofyear %in% c(23,24,25,26) ~ "June",
-                           weekofyear %in% c(27,28,29,30) ~ "July",
-                           weekofyear %in% c(31,32,33,34) ~ "August")) %>%
-  filter(month %in% c("June","July","August")) %>%
-  mutate(season="summer") %>%
-  group_by(waterYear, season, deposition_name) %>%
-  summarize(deposition_kg_per_ha_impute = sum(deposition_kg_per_ha, na.rm=TRUE))
-
 
 
 ```
 
-## Plots
-
-### Annual deposition rates 1991-2022
-```{r, echo=FALSE}
-
-# Peak at the variability 
-
-annual_dep %>%
-  filter(waterYear >= 1991 & waterYear < 2023) %>%
-  ggplot(aes(x=waterYear, y=deposition_kg_per_ha_impute, color=deposition_name))+
-  geom_point()+
-  geom_line()+
-  facet_wrap(~deposition_name, scales="free_y")+
-  theme_few(base_size = 22)
-```
-
-### Monthly deposition rates (1984-2022)
-```{r, echo=FALSE, width="100%", fig.height=unit(16,"cm")}
-
-
-monthly_dep %>%
-  filter(waterYear >= 1984 & waterYear <= 2022) %>%
-  mutate(month = factor(month, levels=c("June","July","August"))) %>%
-  ggplot(aes(x=waterYear, y=deposition_kg_per_ha_impute, color=month))+
-  geom_point()+
-  geom_line()+
-  facet_wrap(deposition_name~month, scales="free_y", ncol=3)+
-  theme_few(base_size = 22)
-```
-
-### Summer deposition rates (1984-2022)
-```{r, echo=FALSE}
-
-summer_dep %>%
-  filter(waterYear >= 1984 & waterYear <= 2022) %>%
-  ggplot(aes(x=waterYear, y=deposition_kg_per_ha_impute, color=deposition_name))+
-  geom_point()+
-  geom_line()+
-  facet_wrap(~deposition_name, scales="free_y")+
-  theme_few(base_size = 22)
-
-```
 
 ### Test for annual deposition trends
 
@@ -275,19 +111,28 @@ print(y_int_results) # inspect
 y_int <-y_int_results$coefficients[[1]] # pull out y-int estimate for ploting
 
 ggplot(N_dep_annual, aes(y = deposition_kg_per_ha_impute, x = waterYear)) +
-  geom_point(col = "red")+
+  geom_point(col = "red", size=5)+
   # use info from our MK and Sen's test to graph the trend line
   geom_abline(intercept = y_int, slope = slope_est, color="blue", size=1.2) +
   labs(title="Annual N deposition MK Trend", 
-       y="Inorganic N (kg/ha)", x="Water Year")
+       y="Inorganic N (kg/ha)", x="Water Year")+
+  theme_few(base_size=36)
+
+
+
+
 ```
 
 
-```{r, echo=FALSE, include=FALSE}
+```{r, echo=FALSE}
 #The sens slope p-value matches M-K so I built a workshop that just uses the sens slope and then the zyp package to get a y-intercept
-dep_trends_nested <- annual_dep %>%
+
+##ANNUAL
+
+annual_dep_trends_nested <- annual_dep %>%
   rename(value=deposition_kg_per_ha_impute) %>%
-  filter(waterYear > 1984 & waterYear < 2024) %>%
+  filter(waterYear > 1984 & waterYear < 2023) %>%
+  # filter(!waterYear==1986) %>% #Lots of missing data for c("SO4-S","cations")
   group_by(deposition_name) %>%
   nest() %>%
   mutate(
@@ -300,7 +145,7 @@ dep_trends_nested <- annual_dep %>%
 
 
 ## Un-nest 
-dep_trends_unnested = unnest(dep_trends_nested, c(sens_sum, slope, deposition_name)) %>%
+annual_dep_trends_unnested = unnest(annual_dep_trends_nested, c(sens_sum, slope, deposition_name)) %>%
   mutate(
     trend = case_when(
       p.value <= 0.05 & slope >= 0 ~ 'increasing',
@@ -314,7 +159,183 @@ dep_trends_unnested = unnest(dep_trends_nested, c(sens_sum, slope, deposition_na
   )
 
 #Extract all covariates for modeling...
-print(dep_trends_slopes_wide <- dep_trends_unnested %>%
-  select(deposition_name, slope, p.value, trend) %>%
-  unnest(c(slope)))
+annual_dep_trends <- annual_dep_trends_unnested %>%
+  select(deposition_name, slope, p.value, intercept, trend) %>%
+  unnest(c(slope)) %>%
+  mutate(time_frame = "annual")%>%
+  mutate(intercept = as.numeric(intercept))
+
+
+
+##MONTHLY
+
+monthly_dep_trends_nested <- monthly_dep %>%
+  rename(value=deposition_kg_per_ha_impute) %>%
+  filter(waterYear > 1984 & waterYear < 2023) %>%
+  # filter(!waterYear==1986) %>% #Lots of missing data for c("SO4-S","cations")
+  group_by(deposition_name, month) %>%
+  nest() %>%
+  mutate(
+    sens = map(data, map_sens),
+    sens_sum = map(sens, broom::glance),
+    slope = map(sens, sens_slope),
+    zyp_mod = map(data, map_zyp),
+    intercept = map(zyp_mod, sens_intercept)
+  )
+
+
+## Un-nest 
+monthly_dep_trends_unnested = unnest(monthly_dep_trends_nested, c(sens_sum, slope, deposition_name, month)) %>%
+  mutate(
+    trend = case_when(
+      p.value <= 0.05 & slope >= 0 ~ 'increasing',
+      p.value <= 0.05 & slope <= 0 ~ 'decreasing',
+      p.value > 0.05 ~ 'no trend'
+    ),
+    trend = factor(trend,
+                       levels = c('no trend',
+                                  'increasing',
+                                  'decreasing'))
+  )
+
+#Extract all covariates for modeling...
+monthly_dep_trends <- monthly_dep_trends_unnested %>%
+  select(deposition_name, month, slope, p.value, trend, intercept) %>%
+  unnest(c(slope)) %>%
+  rename(time_frame=month)%>%
+  mutate(intercept = as.numeric(intercept))
+
+
+##SUMMER
+
+summer_dep_trends_nested <- summer_dep %>%
+  rename(value=deposition_kg_per_ha_impute) %>%
+  filter(waterYear > 1984 & waterYear < 2023) %>%
+  # filter(!waterYear==1986) %>% #Lots of missing data for c("SO4-S","cations")
+  group_by(deposition_name) %>%
+  nest() %>%
+  mutate(
+    sens = map(data, map_sens),
+    sens_sum = map(sens, broom::glance),
+    slope = map(sens, sens_slope),
+    zyp_mod = map(data, map_zyp),
+    intercept = map(zyp_mod, sens_intercept)
+  )
+
+
+## Un-nest 
+summer_dep_trends_unnested = unnest(summer_dep_trends_nested, c(sens_sum, slope, deposition_name)) %>%
+  mutate(
+    trend = case_when(
+      p.value <= 0.05 & slope >= 0 ~ 'increasing',
+      p.value <= 0.05 & slope <= 0 ~ 'decreasing',
+      p.value > 0.05 ~ 'no trend'
+    ),
+    trend = factor(trend,
+                       levels = c('no trend',
+                                  'increasing',
+                                  'decreasing'))
+  )
+
+#Extract all covariates for modeling...
+summer_dep_trends <- summer_dep_trends_unnested %>%
+  select(deposition_name, slope, p.value, trend, intercept) %>%
+  unnest(c(slope)) %>%
+  mutate(time_frame = "summer")%>%
+  mutate(intercept = as.numeric(intercept))
+
+
+all_dep_trends <- bind_rows(annual_dep_trends,
+                            summer_dep_trends,
+                            monthly_dep_trends) %>%
+  mutate(slope = round(slope, 3),
+         p.value = round(p.value,4),
+         p.value = case_when(p.value < 0.001 ~ "<0.001",
+                             TRUE ~ as.character(p.value))) 
+
+all_dep_trends_hux <- 
+  hux(all_dep_trends) %>% 
+  # add_colnames() %>% 
+  set_bold(row = 1, col = everywhere, value = TRUE) %>% 
+  set_all_borders(TRUE) 
+
+theme_plain(all_dep_trends_hux)
+# quick_docx(all_dep_trends_hux, file = 'figures/Table1_deposition_trends.docx')
+
+```
+
+### Annual deposition 1984-2022
+
+There is only a trend line on the plot if p < 0.05.
+
+```{r, echo=FALSE, warning=FALSE}
+
+annual_dep %>%
+  rename(value=deposition_kg_per_ha_impute) %>%
+  filter(waterYear > 1984 & waterYear < 2023) %>%
+  filter(!waterYear==1986) %>%
+  ggplot(aes(x=waterYear, y=value, fill=deposition_name, group=deposition_name))+
+  geom_point(size=4, shape=21)+ 
+  facet_wrap(~deposition_name, scales="free_y")+
+  theme_few(base_size = 24)+
+  geom_abline(data = annual_dep_trends %>% filter(!trend=="no trend"), aes(intercept = intercept, slope = slope, color=deposition_name),
+              linewidth=1.5) +
+  labs(y="Deposition (kg/ha/year)",
+       x="Year",
+       title="Annual") +
+  scale_color_manual(values=chemCols,
+                     "Fit")+
+  scale_fill_manual(values=chemCols,
+                    name="Observed")
+```
+
+### Monthly deposition 1984-2022
+
+There is only a trend line on the plot if p < 0.05.
+
+```{r, echo=FALSE, warning=FALSE}
+
+monthly_dep %>%
+  rename(value=deposition_kg_per_ha_impute) %>%
+  filter(waterYear > 1984 & waterYear < 2023) %>%
+    filter(!waterYear==1986) %>% #Lots of missing data for c("SO4-S","cations")
+  ggplot(aes(x=waterYear, y=value, fill=month, group=month))+
+  geom_point(size=4, shape=21)+ 
+  facet_wrap(~deposition_name, scales="free_y")+
+  theme_few(base_size = 24)+
+  geom_abline(data = monthly_dep_trends %>% rename(month=time_frame)  %>% filter(!trend=="no trend"), aes(intercept = intercept, slope = slope, color=month),
+              linewidth=1.5) +
+  labs(y="Deposition (kg/ha/year)",
+       x="Year",
+       title="Monthly") +
+  scale_color_manual(values=monthCols,
+                     "Fit")+
+  scale_fill_manual(values=monthCols,
+                    name="Observed")
+```
+
+### Summer deposition rates (1984-2022)
+
+There is only a trend line on the plot if p < 0.05.
+
+```{r, echo=FALSE, warning=FALSE}
+
+summer_dep %>%
+  rename(value=deposition_kg_per_ha_impute) %>%
+  filter(waterYear > 1984 & waterYear < 2023) %>%
+  filter(!waterYear==1986) %>% #Lots of missing data for c("SO4-S","cations")
+  ggplot(aes(x=waterYear, y=value, fill=deposition_name, group=deposition_name))+
+  geom_point(size=4, shape=21)+ 
+  facet_wrap(~deposition_name, scales="free_y")+
+  theme_few(base_size = 24)+
+  geom_abline(data = summer_dep_trends %>% filter(!trend=="no trend"),
+              aes(intercept = intercept, slope = slope, color=deposition_name),
+              linewidth=1.5) +
+  labs(y="Deposition (kg/ha/year)",
+       x="Year",
+       title="Summer") +
+  scale_color_manual(values=chemCols,
+                     "Fit")+
+  scale_fill_manual(values=chemCols,
+                    name="Observed")
 ```

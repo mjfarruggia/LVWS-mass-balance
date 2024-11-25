@@ -412,7 +412,7 @@ august_flux <- outlet_weekly_flux %>%
 # Runoff:precipitation ----------------------------------------------------
 
 
-source("script/01.3_NADP_CO98.R")
+source("scripts/01.3_NADP_CO98.R")
 head(LochQ)
 head(NADP)
 

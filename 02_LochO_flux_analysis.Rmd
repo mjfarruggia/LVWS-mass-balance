@@ -116,7 +116,7 @@ annual_export_trends <- annual_export_trends_unnested %>%
 
 
 ##MONTHLY
-monthly_export <- bind_rows( june_flux %>%
+monthly_flux <- bind_rows( june_flux %>%
   select(-june_flux_kg) %>%
   mutate(month="June") %>%
   rename(value=june_flux_kg_per_ha),
@@ -130,8 +130,9 @@ monthly_export <- bind_rows( june_flux %>%
   rename(value=august_flux_kg_per_ha))
 
 
-monthly_export_trends_nested <- monthly_export %>%
+monthly_flux_trends_nested <- monthly_flux %>%
   filter(waterYear > 1984 & waterYear < 2023) %>%
+  filter(!waterYear == 1989) %>% #more than half the data missing this year
   group_by(chem_name, month) %>%
   nest() %>%
   mutate(
@@ -144,7 +145,7 @@ monthly_export_trends_nested <- monthly_export %>%
 
 
 ## Un-nest 
-monthly_export_trends_unnested = unnest(monthly_export_trends_nested, c(sens_sum, slope, chem_name, month)) %>%
+monthly_flux_trends_unnested = unnest(monthly_flux_trends_nested, c(sens_sum, slope, chem_name, month)) %>%
   mutate(
     trend = case_when(
       p.value <= 0.05 & slope >= 0 ~ 'increasing',
@@ -158,7 +159,7 @@ monthly_export_trends_unnested = unnest(monthly_export_trends_nested, c(sens_sum
   )
 
 #Extract all covariates for modeling...
-monthly_export_trends <- monthly_export_trends_unnested %>%
+monthly_flux_trends <- monthly_flux_trends_unnested %>%
   select(chem_name, month, slope, p.value, trend, intercept) %>%
   unnest(c(slope)) %>%
   rename(time_frame=month)%>%
@@ -169,7 +170,8 @@ monthly_export_trends <- monthly_export_trends_unnested %>%
 
 summer_export_trends_nested <- summer_flux %>%
   rename(value=summer_flux_kg_per_ha) %>%
-  filter(waterYear > 1984 & waterYear <= 2022) %>%
+  filter(waterYear > 1984 & waterYear < 2023) %>%
+  filter(!waterYear == 1989) %>% #more than half the data missing this year
   group_by(chem_name) %>%
   nest() %>%
   mutate(
@@ -205,7 +207,7 @@ summer_export_trends <- summer_export_trends_unnested %>%
 
 all_export_trends <- bind_rows(annual_export_trends,
                             summer_export_trends,
-                            monthly_export_trends) %>%
+                            monthly_flux_trends) %>%
   mutate(slope = round(slope, 3),
          p.value = round(p.value,4),
          p.value = case_when(p.value < 0.001 ~ "<0.001",
@@ -255,13 +257,14 @@ There is only a trend line on the plot if p < 0.05.
 
 ```{r, echo=FALSE, warning=FALSE}
 
-monthly_export %>%
+monthly_flux %>%
   filter(waterYear > 1984 & waterYear < 2023) %>%
+  filter(!waterYear == 1989) %>% #more than half the data missing this year
   ggplot(aes(x=waterYear, y=value, fill=month, group=month))+
   geom_point(size=4, shape=21)+ 
   facet_wrap(~chem_name, scales="free_y")+
   theme_few(base_size = 24)+
-  geom_abline(data = monthly_export_trends %>% rename(month=time_frame) %>%filter(!trend=="no trend"), aes(intercept = intercept, slope = slope, color=month),
+  geom_abline(data = monthly_flux_trends %>% rename(month=time_frame) %>%filter(!trend=="no trend"), aes(intercept = intercept, slope = slope, color=month),
               linewidth=1.5) +
   labs(y="Flux (kg/ha/year)",
        x="Year",
@@ -280,6 +283,7 @@ There is only a trend line on the plot if p < 0.05.
 
 summer_flux %>%
   filter(waterYear > 1984 & waterYear < 2023) %>%
+  filter(!waterYear == 1989) %>% #more than half the data missing this year
   ggplot(aes(x=waterYear, y=summer_flux_kg_per_ha, fill=chem_name, group=chem_name))+
   geom_point(size=4, shape=21)+ 
   facet_wrap(~chem_name, scales="free_y")+

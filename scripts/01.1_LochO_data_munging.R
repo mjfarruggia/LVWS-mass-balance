@@ -454,12 +454,3 @@ annual_RP <- bind_RP %>%
             RP = Q_m3/ppt_m3) %>%
   filter(waterYear >= 1984 & waterYear <= 2023)
 
-
-annual_RP %>%
-  ggplot(aes(x=waterYear, y=RP, label=waterYear))+
-  geom_hline(yintercept=mean(annual_RP$RP), color="red")+
-  geom_hline(yintercept=1, color="grey", linetype="dashed")+
-  geom_col()+
-  coord_cartesian(clip = "off") +
-  geom_text_repel(box.padding = 0.5, max.overlaps = 1) 
-

@@ -67,7 +67,8 @@ all_vars <- annual_flux_wide %>%
   left_join(., monthly_flux_wide, by="waterYear") %>%
   left_join(., annual_dep_wide, by="waterYear") %>%
   left_join(., SWE_annual, by="waterYear") %>%
-  left_join(., annual_RP %>% select(waterYear, RP), by="waterYear")
+  left_join(., annual_RP %>% select(waterYear, RP), by="waterYear") %>%
+  left_join(., met_monthly_wide, by="waterYear")
 
 ## Add in the met data
 ```
@@ -76,6 +77,9 @@ all_vars <- annual_flux_wide %>%
 ## Correlation matrix
 ```{r}
 #Look for potentially spurious correlations
+all_vars <- all_vars %>%
+  filter(!waterYear==1989) #RUINING EVERYTHING!
+
 res <- rcorr(as.matrix(all_vars[,2:ncol(all_vars)]),
               type="spearman")
 correlations<-flattenCorrMatrix(res$r, res$P)
@@ -86,19 +90,30 @@ cations_names <- all_vars %>% ungroup() %>% select(contains("flux_cation")) %>% 
 correlations_cations<-correlations%>%
   filter(row %in% cations_names) %>%
   filter(!column %in% all_flux) %>%
-  filter(p < 0.05) 
+  # filter(p < 0.05) %>%
+  mutate(p = round(p, digits=3),
+         cor = round(cor, digits=2))
+
+write_csv(correlations_cations,"data/export/correlations_cations.csv")
+
 
 SO4_names <- all_vars %>% ungroup() %>% select(contains("flux_SO4")) %>% colnames()
 correlations_SO4<-correlations%>%
   filter(row %in% SO4_names) %>%
   filter(!column %in% all_flux) %>%
-  filter(p < 0.05) 
+  # filter(p < 0.05) %>%
+  mutate(p = round(p, digits=3),
+         cor = round(cor, digits=2))
+write_csv(correlations_SO4,"data/export/correlations_SO4.csv")
 
 NO3_names <- all_vars %>% ungroup() %>% select(contains("flux_NO3")) %>% colnames()
 correlations_NO3<-correlations%>%
   filter(row %in% NO3_names) %>%
   filter(!column %in% all_flux) %>%
-  filter(p < 0.05) 
+  # filter(p < 0.05) %>%
+  mutate(p = round(p, digits=3),
+         cor = round(cor, digits=2))
+write_csv(correlations_NO3,"data/export/correlations_NO3.csv")
 
 NH4_names <- all_vars %>% ungroup() %>% select(contains("flux_NH4")) %>% colnames()
 correlations_NH4<-correlations%>%
@@ -110,7 +125,465 @@ SiO2_names <- all_vars %>% ungroup() %>% select(contains("flux_SiO2")) %>% colna
 correlations_SiO2<-correlations%>%
   filter(row %in% SiO2_names) %>%
   filter(!column %in% all_flux) %>%
-  filter(p < 0.05) 
+  # filter(p < 0.05) %>%
+  mutate(p = round(p, digits=3),
+         cor = round(cor, digits=2))
+write_csv(correlations_SiO2,"data/export/correlations_SiO2.csv")
+
+```
+
+### Export cation flux plots
+```{r}
+
+correlations_cations_trim <- correlations_cations %>%
+  filter(!column %in% c("annual_dep_IN","annual_dep_NH4_N","annual_dep_SO4_S")) #remove spurious relationships
+
+
+# Define output directory for plots
+output_dir <- "figures/correlations/cation flux"
+if (!dir.exists(output_dir)) {
+  dir.create(output_dir)
+}
+
+# Iterate over each row in the correlations data
+for (i in seq_len(nrow(correlations_cations_trim))) {
+  # Extract the variable names and correlation coefficient
+  var_x <- correlations_cations_trim$row[i]
+  var_y <- correlations_cations_trim$column[i]
+  cor_value <- round(correlations_cations_trim$cor[i], 3)
+  
+  # Check if both variables are present in all_vars
+  if (var_x %in% colnames(all_vars) && var_y %in% colnames(all_vars)) {
+    # Create the plot
+    p <- ggplot(all_vars, aes_string(x = var_x, y = var_y)) +
+      geom_point(alpha = 0.7) +
+      labs(
+        title = paste("Scatterplot of", var_x, "vs", var_y),
+        x = var_x,
+        y = var_y
+      ) +
+      annotate(
+        "text",
+        x = Inf, y = Inf,
+        label = paste("Spearman Correlation:", cor_value),
+        hjust = 1.1, vjust = 1.5,
+        size = 5, color = "blue"
+      ) +
+      theme_few()
+    
+    # Save the plot
+    plot_filename <- file.path(output_dir, paste0("plot_", var_x, "_vs_", var_y, ".png"))
+    ggsave(plot_filename, plot = p, width = 8, height = 6, units="in", dpi=600)
+  }
+}
+
+
+```
+
+### Export NO3 plots
+```{r}
+
+correlations_NO3_trim <- correlations_NO3 %>%
+  filter(!column %in% c("annual_dep_cations")) #remove spurious relationships
+
+
+# Define output directory for plots
+output_dir <- "figures/correlations/nitrate flux"
+if (!dir.exists(output_dir)) {
+  dir.create(output_dir)
+}
+
+# Iterate over each row in the correlations data
+for (i in seq_len(nrow(correlations_NO3_trim))) {
+  # Extract the variable names and correlation coefficient
+  var_x <- correlations_NO3_trim$row[i]
+  var_y <- correlations_NO3_trim$column[i]
+  cor_value <- round(correlations_NO3_trim$cor[i], 3)
+  
+  # Check if both variables are present in all_vars
+  if (var_x %in% colnames(all_vars) && var_y %in% colnames(all_vars)) {
+    # Create the plot
+    p <- ggplot(all_vars, aes_string(x = var_x, y = var_y)) +
+      geom_point(alpha = 0.7) +
+      labs(
+        title = paste("Scatterplot of", var_x, "vs", var_y),
+        x = var_x,
+        y = var_y
+      ) +
+      annotate(
+        "text",
+        x = Inf, y = Inf,
+        label = paste("Spearman Correlation:", cor_value),
+        hjust = 1.1, vjust = 1.5,
+        size = 5, color = "blue"
+      ) +
+      theme_few()
+    
+    # Save the plot
+    plot_filename <- file.path(output_dir, paste0("plot_", var_x, "_vs_", var_y, ".png"))
+    ggsave(plot_filename, plot = p, width = 8, height = 6, units="in", dpi=600)
+  }
+}
+
+
+```
+
+### Export NH4 plots
+```{r}
+
+#These are all spurious so I didn't plot them
+
+```
+
+### Export SiO2 plots
+```{r}
+
+correlations_SiO2_trim <- correlations_SiO2 %>%
+  filter(!column %in% c("annual_dep_IN","annual_dep_NO3_N","annual_dep_cations")) #remove spurious relationships
+
+
+# Define output directory for plots
+output_dir <- "figures/correlations/silica flux"
+if (!dir.exists(output_dir)) {
+  dir.create(output_dir)
+}
+
+# Iterate over each row in the correlations data
+for (i in seq_len(nrow(correlations_SiO2_trim))) {
+  # Extract the variable names and correlation coefficient
+  var_x <- correlations_SiO2_trim$row[i]
+  var_y <- correlations_SiO2_trim$column[i]
+  cor_value <- round(correlations_SiO2_trim$cor[i], 3)
+  
+  # Check if both variables are present in all_vars
+  if (var_x %in% colnames(all_vars) && var_y %in% colnames(all_vars)) {
+    # Create the plot
+    p <- ggplot(all_vars, aes_string(x = var_x, y = var_y)) +
+      geom_point(alpha = 0.7) +
+      labs(
+        title = paste("Scatterplot of", var_x, "vs", var_y),
+        x = var_x,
+        y = var_y
+      ) +
+      annotate(
+        "text",
+        x = Inf, y = Inf,
+        label = paste("Spearman Correlation:", cor_value),
+        hjust = 1.1, vjust = 1.5,
+        size = 5, color = "blue"
+      ) +
+      theme_few()
+    
+    # Save the plot
+    plot_filename <- file.path(output_dir, paste0("plot_", var_x, "_vs_", var_y, ".png"))
+    ggsave(plot_filename, plot = p, width = 8, height = 6, units="in", dpi=600)
+  }
+}
+
+
+```
+
+
+### Export SO4 plots
+```{r}
+
+correlations_SO4_trim <- correlations_SO4 %>%
+  filter(!column %in% c("annual_dep_NH4_N","annual_dep_IN","annual_dep_cations")) #remove spurious relationships
+
+
+# Define output directory for plots
+output_dir <- "figures/correlations/sulfate flux"
+if (!dir.exists(output_dir)) {
+  dir.create(output_dir)
+}
+
+# Iterate over each row in the correlations data
+for (i in seq_len(nrow(correlations_SO4_trim))) {
+  # Extract the variable names and correlation coefficient
+  var_x <- correlations_SO4_trim$row[i]
+  var_y <- correlations_SO4_trim$column[i]
+  cor_value <- round(correlations_SO4_trim$cor[i], 3)
+  
+  # Check if both variables are present in all_vars
+  if (var_x %in% colnames(all_vars) && var_y %in% colnames(all_vars)) {
+    # Create the plot
+    p <- ggplot(all_vars, aes_string(x = var_x, y = var_y)) +
+      geom_point(alpha = 0.7) +
+      labs(
+        title = paste("Scatterplot of", var_x, "vs", var_y),
+        x = var_x,
+        y = var_y
+      ) +
+      annotate(
+        "text",
+        x = Inf, y = Inf,
+        label = paste("Spearman Correlation:", cor_value),
+        hjust = 1.1, vjust = 1.5,
+        size = 5, color = "blue"
+      ) +
+      theme_few()
+    
+    # Save the plot
+    plot_filename <- file.path(output_dir, paste0("plot_", var_x, "_vs_", var_y, ".png"))
+    ggsave(plot_filename, plot = p, width = 8, height = 6, units="in", dpi=600)
+  }
+}
+
+
+```
+
+
+
+#Look at extremes for SWE, RP, July temps
+```{r}
+
+all_vars_groupings <- all_vars %>%
+  ungroup() %>%
+    mutate(Tmax2M_Jul_quantile=cut_number(Tmax2M_Jul, 8, labels=FALSE),
+         max_swe_quantile=cut_number(max_swe,8, labels=FALSE),
+         RP_quantile=cut_number(RP,8, labels=FALSE),
+         )
+
+all_vars_groupings %>%
+  ggplot(aes(x=annual_flux_cations, y=max_swe, color=factor(max_swe_quantile)))+
+  geom_point()
+
+write_csv(all_vars_groupings, "data/export/all_variables_by_waterYear.csv")
+
+```
+
+# Plot climate trends
+## Maximum monthly temps
+```{r}
+
+
+met_monthly_max_nested <- met_monthly %>%
+  rename(value=Tmax2M) %>%
+  select(-Tave2M, -Tmin2M) %>%
+  drop_na() %>%
+  filter(waterYear > 1984 & waterYear < 2023) %>%
+  # filter(!waterYear==1986) %>% #Lots of missing data for c("SO4-S","cations")
+  group_by(month) %>%
+  nest() %>%
+  mutate(
+    sens = map(data, map_sens),
+    sens_sum = map(sens, broom::glance),
+    slope = map(sens, sens_slope),
+    zyp_mod = map(data, map_zyp),
+    intercept = map(zyp_mod, sens_intercept)
+  )
+
+
+## Un-nest 
+met_monthly_max_unnested = unnest(met_monthly_max_nested, c(sens_sum, slope, month)) %>%
+  mutate(
+    trend = case_when(
+      p.value <= 0.05 & slope >= 0 ~ 'increasing',
+      p.value <= 0.05 & slope <= 0 ~ 'decreasing',
+      p.value > 0.05 ~ 'no trend'
+    ),
+    trend = factor(trend,
+                       levels = c('no trend',
+                                  'increasing',
+                                  'decreasing'))
+  )
+
+#Extract all covariates for modeling...
+met_monthly_max_trends <- met_monthly_max_unnested %>%
+  select(month, slope, p.value, intercept, trend) %>%
+  unnest(c(slope)) %>%
+  mutate(intercept = as.numeric(intercept))
+
+met_monthly %>%
+  filter(!waterYear==1984 )%>%
+  ggplot(aes(x=waterYear, y=Tmax2M))+
+  geom_point()+
+  facet_wrap(~month, scales="free_y")+
+  geom_abline(data = met_monthly_max_trends %>% filter(!trend=="no trend"), aes(intercept = intercept, slope = slope)) +
+  labs(title="Maximum monthly temperature by month",
+       y="Temperature °C",
+       x="Year")+
+  theme_few()
+ggsave("figures/climate_trends/monthly_max_temps.png")
+```
+
+## Average monthly temps
+```{r}
+
+met_monthly_ave_nested <- met_monthly %>%
+  rename(value=Tave2M) %>%
+  select(-Tmax2M, -Tmin2M) %>%
+  drop_na() %>%
+  filter(waterYear > 1984 & waterYear < 2023) %>%
+  # filter(!waterYear==1986) %>% #Lots of missing data for c("SO4-S","cations")
+  group_by(month) %>%
+  nest() %>%
+  mutate(
+    sens = map(data, map_sens),
+    sens_sum = map(sens, broom::glance),
+    slope = map(sens, sens_slope),
+    zyp_mod = map(data, map_zyp),
+    intercept = map(zyp_mod, sens_intercept)
+  )
+
+
+## Un-nest 
+met_monthly_ave_unnested = unnest(met_monthly_ave_nested, c(sens_sum, slope, month)) %>%
+  mutate(
+    trend = case_when(
+      p.value <= 0.05 & slope >= 0 ~ 'increasing',
+      p.value <= 0.05 & slope <= 0 ~ 'decreasing',
+      p.value > 0.05 ~ 'no trend'
+    ),
+    trend = factor(trend,
+                       levels = c('no trend',
+                                  'increasing',
+                                  'decreasing'))
+  )
+
+#Extract all covariates for modeling...
+met_monthly_ave_trends <- met_monthly_ave_unnested %>%
+  select(month, slope, p.value, intercept, trend) %>%
+  unnest(c(slope)) %>%
+  mutate(intercept = as.numeric(intercept))
+
+
+met_monthly %>%
+    filter(!waterYear==1984 )%>%
+  ggplot(aes(x=waterYear, y=Tave2M))+
+  geom_point()+
+    facet_wrap(~month, scales="free_y")+
+  geom_abline(data = met_monthly_ave_trends %>% filter(!trend=="no trend"), aes(intercept = intercept, slope = slope)) +
+  labs(title="Average monthly temperature by month",
+              y="Temperature °C",
+       x="Year")+
+  theme_few()
+ggsave("figures/climate_trends/monthly_ave_temps.png")
+
+```
+
+## Minimum monthly temps
+```{r}
+
+met_monthly_min_nested <- met_monthly %>%
+  rename(value=Tmin2M) %>%
+  select(-Tmax2M, -Tave2M) %>%
+  drop_na() %>%
+  filter(waterYear > 1984 & waterYear < 2023) %>%
+  # filter(!waterYear==1986) %>% #Lots of missing data for c("SO4-S","cations")
+  group_by(month) %>%
+  nest() %>%
+  mutate(
+    sens = map(data, map_sens),
+    sens_sum = map(sens, broom::glance),
+    slope = map(sens, sens_slope),
+    zyp_mod = map(data, map_zyp),
+    intercept = map(zyp_mod, sens_intercept)
+  )
+
+
+## Un-nest 
+met_monthly_min_unnested = unnest(met_monthly_min_nested, c(sens_sum, slope, month)) %>%
+  mutate(
+    trend = case_when(
+      p.value <= 0.05 & slope >= 0 ~ 'increasing',
+      p.value <= 0.05 & slope <= 0 ~ 'decreasing',
+      p.value > 0.05 ~ 'no trend'
+    ),
+    trend = factor(trend,
+                       levels = c('no trend',
+                                  'increasing',
+                                  'decreasing'))
+  )
+
+#Extract all covariates for modeling...
+met_monthly_min_trends <- met_monthly_min_unnested %>%
+  select(month, slope, p.value, intercept, trend) %>%
+  unnest(c(slope)) %>%
+  mutate(intercept = as.numeric(intercept))
+
+
+met_monthly %>%
+    filter(!waterYear==1984 )%>%
+  ggplot(aes(x=waterYear, y=Tmin2M))+
+  geom_point()+
+  facet_wrap(~month, scales="free_y")+
+  geom_abline(data = met_monthly_min_trends %>% filter(!trend=="no trend"), aes(intercept = intercept, slope = slope)) +
+  labs(title="Minimum monthly temperature by month",
+              y="Temperature °C",
+       x="Year")+
+  theme_few()+
+  theme()
+ggsave("figures/climate_trends/monthly_min_temps.png")
+
+```
+
+## Max SWE at Bear Lake
+```{r}
+
+SWE_stats %>%
+  ggplot(aes(x=waterYear, y=max_swe_doy))+
+  geom_point()+
+  labs(y="Day of max SWE (DOY since Jan 1)",
+       x="Water year")+
+    theme_few()
+ggsave("figures/climate_trends/SWE_doy_max.png")
+
+SWE_stats %>%
+  ggplot(aes(x=waterYear, y=max_swe))+
+  geom_point()+
+  labs(y="Maximum snow water equivelent (mm)",
+       x="Water year")+
+    theme_few()
+ggsave("figures/climate_trends/MaxSWE.png")
+
+```
+
+## R:P
+```{r}
+
+annual_RP %>%
+  filter(waterYear < 2023) %>% 
+  ggplot(aes(x=waterYear, y=RP, label=waterYear))+
+  geom_hline(yintercept=mean(annual_RP$RP), color="red")+
+  geom_hline(yintercept=1, color="grey", linetype="dashed")+
+  geom_col()+
+  coord_cartesian(clip = "off") +
+  geom_text_repel(box.padding = 0.5, max.overlaps = 1) +
+  theme_few()+
+  labs(y="R:P",
+       x="Water Year")
+ggsave("figures/climate_trends/RP_by_waterYear.png")
+
+
+all_vars_groupings %>%
+  mutate(SWE_extremes = case_when(max_swe_quantile == 8 ~ "Low SWE years",
+                                  max_swe_quantile == 1 ~ "High SWE years",
+                                  TRUE ~ NA)) %>%
+  ggplot(aes(y=RP, x=waterYear, fill=SWE_extremes)) +
+  geom_point(size=2, shape=21)+
+  theme_few()+
+  theme(legend.position = "none")+
+  scale_fill_manual(values=c("green","red","white"))+
+  labs(x="Water Year",
+       y="R:P",
+       caption="High SWE years = green, Low SWE years = red, all others grey")
+ggsave("figures/climate_trends/RP_by_waterYear_colorSWE.png")
+
+
+all_vars_groupings %>%
+  mutate(RP_extremes = case_when(RP_quantile == 8 ~ "Low R:P years",
+                                  RP_quantile == 1 ~ "High R:P years",
+                                  TRUE ~ NA)) %>%
+  ggplot(aes(y=max_swe, x=waterYear, fill=RP_extremes)) +
+  geom_point(size=2, shape=21)+
+  theme_few()+
+  theme(legend.position = "none")+
+  scale_fill_manual(values=c("red","cyan","white"))+
+  labs(x="Water Year",
+       y="Max SWE (mm)",
+       caption="High R:P years = red, Low R:P years = cyan, all others grey")
+ggsave("figures/climate_trends/SWE_by_waterYear_colorRP.png")
 
 
 ```

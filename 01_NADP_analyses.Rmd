@@ -21,7 +21,7 @@ source("scripts/00_libraries.R")
 source("scripts/01.1_LochO_data_munging.R")
 source("scripts/01.2_Bear_Lake_SNOTEL.R")
 source("scripts/01.3_NADP_CO98.R")
-knitr::opts_chunk$set(fig.width=18, fig.height=11)
+knitr::opts_chunk$set(fig.width=6, fig.height=8)
 
 
 ```
@@ -275,11 +275,10 @@ annual_dep %>%
   filter(waterYear > 1984 & waterYear < 2023) %>%
   filter(!waterYear==1986) %>%
   ggplot(aes(x=waterYear, y=value, fill=deposition_name, group=deposition_name))+
-  geom_point(size=4, shape=21)+ 
+  geom_point(size=2, shape=21)+ 
   facet_wrap(~deposition_name, scales="free_y")+
-  theme_few(base_size = 24)+
-  geom_abline(data = annual_dep_trends %>% filter(!trend=="no trend"), aes(intercept = intercept, slope = slope, color=deposition_name),
-              linewidth=1.5) +
+  theme_few(base_size = 12)+
+  geom_abline(data = annual_dep_trends %>% filter(!trend=="no trend"), aes(intercept = intercept, slope = slope, color=deposition_name)) +
   labs(y="Deposition (kg/ha/year)",
        x="Year",
        title="Annual") +
@@ -287,6 +286,7 @@ annual_dep %>%
                      "Fit")+
   scale_fill_manual(values=chemCols,
                     name="Observed")
+ggsave("figures/deposition_trends_annual.png", dpi=600, width=8, height=6, units="in")
 ```
 
 ### Monthly deposition 1984-2022
@@ -300,11 +300,10 @@ monthly_dep %>%
   filter(waterYear > 1984 & waterYear < 2023) %>%
     filter(!waterYear==1986) %>% #Lots of missing data for c("SO4-S","cations")
   ggplot(aes(x=waterYear, y=value, fill=month, group=month))+
-  geom_point(size=4, shape=21)+ 
+  geom_point(size=2, shape=21)+ 
   facet_wrap(~deposition_name, scales="free_y")+
-  theme_few(base_size = 24)+
-  geom_abline(data = monthly_dep_trends %>% rename(month=time_frame)  %>% filter(!trend=="no trend"), aes(intercept = intercept, slope = slope, color=month),
-              linewidth=1.5) +
+  theme_few(base_size = 12)+
+  geom_abline(data = monthly_dep_trends %>% rename(month=time_frame)  %>% filter(!trend=="no trend"), aes(intercept = intercept, slope = slope, color=month)) +
   labs(y="Deposition (kg/ha/year)",
        x="Year",
        title="Monthly") +
@@ -312,6 +311,7 @@ monthly_dep %>%
                      "Fit")+
   scale_fill_manual(values=monthCols,
                     name="Observed")
+ggsave("figures/deposition_trends_monthly.png", dpi=600, width=8, height=6, units="in")
 ```
 
 ### Summer deposition rates (1984-2022)
@@ -325,12 +325,11 @@ summer_dep %>%
   filter(waterYear > 1984 & waterYear < 2023) %>%
   filter(!waterYear==1986) %>% #Lots of missing data for c("SO4-S","cations")
   ggplot(aes(x=waterYear, y=value, fill=deposition_name, group=deposition_name))+
-  geom_point(size=4, shape=21)+ 
+  geom_point(size=2, shape=21)+ 
   facet_wrap(~deposition_name, scales="free_y")+
-  theme_few(base_size = 24)+
+  theme_few(base_size = 12)+
   geom_abline(data = summer_dep_trends %>% filter(!trend=="no trend"),
-              aes(intercept = intercept, slope = slope, color=deposition_name),
-              linewidth=1.5) +
+              aes(intercept = intercept, slope = slope, color=deposition_name)) +
   labs(y="Deposition (kg/ha/year)",
        x="Year",
        title="Summer") +
@@ -338,4 +337,5 @@ summer_dep %>%
                      "Fit")+
   scale_fill_manual(values=chemCols,
                     name="Observed")
+ggsave("figures/deposition_trends_summer.png", dpi=600, width=8, height=6, units="in")
 ```

@@ -235,12 +235,10 @@ There is only a trend line on the plot if p < 0.05.
 annual_flux %>%
   filter(waterYear >= 1991 & waterYear <= 2024) %>%
   ggplot(aes(x=waterYear, y=annual_flux_kg_per_ha, fill=chem_name, group=chem_name))+
-  geom_point(size=4, shape=21)+ 
+  geom_point(size=2, shape=21)+ 
   facet_wrap(~chem_name, scales="free_y")+
-  theme_few(base_size = 24)+
-  geom_abline(data = annual_export_trends %>% filter(!trend=="no trend"), aes(intercept = intercept, slope = slope),
-              col = "black",
-              linewidth=1.5) +
+  theme_few(base_size = 12)+
+  geom_abline(data = annual_export_trends %>% filter(!trend=="no trend"), aes(intercept = intercept, slope = slope, color=chem_name)) +
   labs(y="Flux (kg/ha/year)",
        x="Year",
        title="Annual") +
@@ -249,6 +247,7 @@ annual_flux %>%
                      "Fit")+
   scale_fill_manual(values=chemCols,
                     name="Observed")
+ggsave("figures/loch_export_trends_annual.png", dpi=600, width=8, height=6, units="in")
 ```
 
 ### Monthly fluxes 1984-2022
@@ -261,11 +260,10 @@ monthly_flux %>%
   filter(waterYear > 1984 & waterYear < 2023) %>%
   filter(!waterYear == 1989) %>% #more than half the data missing this year
   ggplot(aes(x=waterYear, y=value, fill=month, group=month))+
-  geom_point(size=4, shape=21)+ 
+  geom_point(size=2, shape=21)+ 
   facet_wrap(~chem_name, scales="free_y")+
-  theme_few(base_size = 24)+
-  geom_abline(data = monthly_flux_trends %>% rename(month=time_frame) %>%filter(!trend=="no trend"), aes(intercept = intercept, slope = slope, color=month),
-              linewidth=1.5) +
+  theme_few(base_size = 12)+
+  geom_abline(data = monthly_flux_trends %>% rename(month=time_frame) %>%filter(!trend=="no trend"), aes(intercept = intercept, slope = slope, color=month)) +
   labs(y="Flux (kg/ha/year)",
        x="Year",
        title="Monthly") +
@@ -273,6 +271,7 @@ monthly_flux %>%
                      "Fit")+
   scale_fill_manual(values=monthCols,
                     name="Observed")
+ggsave("figures/loch_export_trends_monthly.png", dpi=600, width=8, height=6, units="in")
 ```
 
 ### Summer fluxes 1984-2022
@@ -285,11 +284,10 @@ summer_flux %>%
   filter(waterYear > 1984 & waterYear < 2023) %>%
   filter(!waterYear == 1989) %>% #more than half the data missing this year
   ggplot(aes(x=waterYear, y=summer_flux_kg_per_ha, fill=chem_name, group=chem_name))+
-  geom_point(size=4, shape=21)+ 
+  geom_point(size=2, shape=21)+ 
   facet_wrap(~chem_name, scales="free_y")+
-  theme_few(base_size = 24)+
-  geom_abline(data = summer_export_trends %>%filter(!trend=="no trend"), aes(intercept = intercept, slope = slope, color=chem_name),
-              linewidth=1.5) +
+  theme_few(base_size = 12)+
+  geom_abline(data = summer_export_trends %>%filter(!trend=="no trend"), aes(intercept = intercept, slope = slope, color=chem_name)) +
   labs(y="Flux (kg/ha/year)",
        x="Year",
        title="Summer (JJA)") +
@@ -297,4 +295,5 @@ summer_flux %>%
                      "Fit")+
   scale_fill_manual(values=chemCols,
                     name="Observed")
+ggsave("figures/loch_export_trends_summer.png", dpi=600, width=8, height=6, units="in")
 ```

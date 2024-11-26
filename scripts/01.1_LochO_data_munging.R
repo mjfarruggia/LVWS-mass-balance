@@ -452,7 +452,7 @@ annual_RP <- bind_RP %>%
   summarize(ppt_m3 = sum(ppt_m3, na.rm=TRUE),
             Q_m3 = sum(Q_m3, na.rm=TRUE),
             RP = Q_m3/ppt_m3) %>%
-  filter(waterYear > 1984 & waterYear < 2024)
+  filter(waterYear >= 1984 & waterYear <= 2023)
 
 
 annual_RP %>%

@@ -59,3 +59,18 @@ met_all %>%
   ggplot(aes(x=date, y=Tave2M))+
   geom_point()+
   facet_wrap(~waterYear, scales="free_x")
+
+
+met_monthly <- met_all %>%
+  mutate(month = month(date, label=TRUE)) %>%
+  group_by(waterYear,month) %>%
+  summarize(Tmax2M=mean(Tmax2M, na.rm=TRUE),
+            Tave2M=mean(Tave2M, na.rm=TRUE),
+            Tmin2M=mean(Tmin2M, na.rm=TRUE))
+
+met_monthly[sapply(met_monthly, is.infinite)] <- NA
+
+
+met_monthly_wide <- met_monthly %>%
+  select(waterYear, month, contains("Tmax2M")) %>%
+  pivot_wider(names_from = month, values_from = Tmax2M, names_prefix = "Tmax2M_")

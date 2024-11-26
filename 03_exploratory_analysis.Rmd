@@ -14,27 +14,103 @@ source("scripts/01.1_LochO_data_munging.R")
 source("scripts/01.2_Bear_Lake_SNOTEL.R")
 source("scripts/01.3_NADP_CO98.R")
 knitr::opts_chunk$set(fig.width=18, fig.height=11)
-
-
-```
 ```
 
-## R Markdown
 
-This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+# Explore correlations
 
-When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+Explore correlations between fluxes and climate and deposition
 
 ```{r cars}
-summary(cars)
+#Compile all the outlet flux data, separate column per 
+annual_flux_wide <- annual_flux %>%
+  select(-annual_flux_kg) %>%
+  pivot_wider(names_from = chem_name, values_from = annual_flux_kg_per_ha, names_prefix = "annual_flux_") %>%
+  rename(annual_flux_NH4_N=`annual_flux_NH4-N`,
+         annual_flux_NO3_N=`annual_flux_NO3-N`,
+         annual_flux_SO4_S=`annual_flux_SO4-S`)
+
+summer_flux_wide <- summer_flux %>%
+  select(-summer_flux_kg) %>%
+  pivot_wider(names_from = chem_name, values_from = summer_flux_kg_per_ha, names_prefix = "summer_flux_") %>%
+    rename(summer_flux_NH4_N=`summer_flux_NH4-N`,
+        summer_flux_NO3_N=`summer_flux_NO3-N`,
+        summer_flux_SO4_S=`summer_flux_SO4-S`)
+
+monthly_flux_wide <- monthly_flux %>%
+  mutate(chem_name = case_match(
+    chem_name,
+    "NH4-N" ~ "NH4_N",
+    "NO3-N" ~ "NO3_N",
+    "SO4-S" ~ "SO4_S",
+    .default = chem_name
+  )) %>%
+  pivot_wider(names_from = c(chem_name, month), values_from = value, names_prefix = "flux_")
+
+
+annual_dep_wide <- annual_dep %>%
+  pivot_wider(names_from = deposition_name,
+              values_from = deposition_kg_per_ha_impute,
+              names_prefix = "annual_dep_") %>%
+  rename(
+    annual_dep_NH4_N = `annual_dep_NH4-N`,
+    annual_dep_NO3_N = `annual_dep_NO3-N`,
+    annual_dep_SO4_S = `annual_dep_SO4-S`,
+    annual_dep_IN = `annual_dep_Inorganic N`
+  )
+
+SWE_annual <- SWE_stats %>%
+  select(waterYear, max_swe)
+
+all_vars <- annual_flux_wide %>%
+  left_join(., summer_flux_wide, by="waterYear") %>%
+  left_join(., monthly_flux_wide, by="waterYear") %>%
+  left_join(., annual_dep_wide, by="waterYear") %>%
+  left_join(., SWE_annual, by="waterYear") %>%
+  left_join(., annual_RP %>% select(waterYear, RP), by="waterYear")
+
+## Add in the met data
 ```
 
-## Including Plots
 
-You can also embed plots, for example:
+## Correlation matrix
+```{r}
+#Look for potentially spurious correlations
+res <- rcorr(as.matrix(all_vars[,2:ncol(all_vars)]),
+              type="spearman")
+correlations<-flattenCorrMatrix(res$r, res$P)
 
-```{r pressure, echo=FALSE}
-plot(pressure)
+all_flux <- all_vars %>% ungroup() %>% select(contains("flux")) %>% colnames()
+
+cations_names <- all_vars %>% ungroup() %>% select(contains("flux_cation")) %>% colnames()
+correlations_cations<-correlations%>%
+  filter(row %in% cations_names) %>%
+  filter(!column %in% all_flux) %>%
+  filter(p < 0.05) 
+
+SO4_names <- all_vars %>% ungroup() %>% select(contains("flux_SO4")) %>% colnames()
+correlations_SO4<-correlations%>%
+  filter(row %in% SO4_names) %>%
+  filter(!column %in% all_flux) %>%
+  filter(p < 0.05) 
+
+NO3_names <- all_vars %>% ungroup() %>% select(contains("flux_NO3")) %>% colnames()
+correlations_NO3<-correlations%>%
+  filter(row %in% NO3_names) %>%
+  filter(!column %in% all_flux) %>%
+  filter(p < 0.05) 
+
+NH4_names <- all_vars %>% ungroup() %>% select(contains("flux_NH4")) %>% colnames()
+correlations_NH4<-correlations%>%
+  filter(row %in% NH4_names) %>%
+  filter(!column %in% all_flux) %>%
+  filter(p < 0.05) 
+
+SiO2_names <- all_vars %>% ungroup() %>% select(contains("flux_SiO2")) %>% colnames()
+correlations_SiO2<-correlations%>%
+  filter(row %in% SiO2_names) %>%
+  filter(!column %in% all_flux) %>%
+  filter(p < 0.05) 
+
+
 ```
-
-Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.

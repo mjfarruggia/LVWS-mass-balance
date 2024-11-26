@@ -50,4 +50,4 @@ po/*~
 rsconnect/
 
 #Big files
-*data/
+*/data/WY1992to2019_LochVale_Climate_SexstoneDataRelease.csv

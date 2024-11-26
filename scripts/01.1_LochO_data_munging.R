@@ -173,6 +173,9 @@ length(unique(LochO_chem$DATE))
 #Check for missing data
 vis_miss(LochO_chem)
 
+#Check for missing data
+vis_miss(LochO_chem %>% filter(waterYear == 1989))
+
 
 outlet_raw <- LochQ %>%
   select(date, Q_m3s) %>%

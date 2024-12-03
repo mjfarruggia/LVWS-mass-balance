@@ -1,3 +1,5 @@
+source("scripts/00_functions.R")
+source("scripts/00_libraries.R")
 #Pull in the disparate .csv files with loch outlet Q data
 #(temp, cond, and other exist at different timescales but we'll just pull Q for now)
 

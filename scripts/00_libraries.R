@@ -38,8 +38,9 @@ pacman::p_load("lubridate",
                "huxtable",
                "officer",
                "flextable",
-               "colorblindr",
-               "Hmisc")
+               # "colorblindr",
+               "Hmisc",
+               "readxl")
 
 #Use renv for version control.  Beginner guide here:
 # https://rstudio.github.io/renv/articles/renv.html

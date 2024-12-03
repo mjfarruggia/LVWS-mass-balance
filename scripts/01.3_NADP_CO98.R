@@ -1,3 +1,6 @@
+source("scripts/00_functions.R")
+source("scripts/00_libraries.R")
+
 NADP <- read_csv(here("data/NTN-CO98-1984-2024.csv")) %>%
   mutate(dateTimeOn = mdy_hm(dateOn),
          dateTimeOff = mdy_hm(dateOff)) %>%

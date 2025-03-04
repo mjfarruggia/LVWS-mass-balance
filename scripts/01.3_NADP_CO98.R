@@ -1,6 +1,3 @@
-source("scripts/00_functions.R")
-source("scripts/00_libraries.R")
-
 NADP <- read_csv(here("data/NTN-CO98-1984-2024.csv")) %>%
   mutate(dateTimeOn = mdy_hm(dateOn),
          dateTimeOff = mdy_hm(dateOff)) %>%
@@ -59,14 +56,8 @@ compare %>%
 
 NADP <- NADP_bret %>%
   select(date, weekofyear, ppt_mm_bret, NO3_mgL_bret, NH4_mgL_bret, IN_mgL_bret) %>%
-  left_join(., NADP, by=c("date"="start_date_plus_4","weekofyear")) 
+  left_join(., NADP, by=c("date"="start_date_plus_4","weekofyear"))
 
-#Export file for Bryan
-NADP_BG <- NADP %>%
-  select(date, weekofyear, waterYear, ppt_mm_bret) %>%
-  rename(ppt_mm=ppt_mm_bret) %>%
-  mutate(waterYear = calcWaterYear(date))
-write_csv(NADP_BG, "data/export/weekly_precip_mm_WY1983-2023.csv")
 
 #Annual dep
 annual_dep <- NADP %>%

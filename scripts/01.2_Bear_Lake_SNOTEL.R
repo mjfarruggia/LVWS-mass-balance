@@ -1,5 +1,3 @@
-source("scripts/00_functions.R")
-source("scripts/00_libraries.R")
 ##Pull Bear Lake SNOTEL data from the snotelr package
 #https://bluegreen-labs.github.io/snotelr/articles/snotelr-vignette.html
 

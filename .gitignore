@@ -48,6 +48,3 @@ po/*~
 
 # RStudio Connect folder
 rsconnect/
-
-#Big files
-*/data/WY1992to2019_LochVale_Climate_SexstoneDataRelease.csv

@@ -1,5 +1,3 @@
-source("scripts/00_functions.R")
-source("scripts/00_libraries.R")
 #Pull in the disparate .csv files with loch outlet Q data
 #(temp, cond, and other exist at different timescales but we'll just pull Q for now)
 
@@ -454,5 +452,14 @@ annual_RP <- bind_RP %>%
   summarize(ppt_m3 = sum(ppt_m3, na.rm=TRUE),
             Q_m3 = sum(Q_m3, na.rm=TRUE),
             RP = Q_m3/ppt_m3) %>%
-  filter(waterYear >= 1984 & waterYear <= 2023)
+  filter(waterYear > 1984 & waterYear < 2024)
+
+
+annual_RP %>%
+  ggplot(aes(x=waterYear, y=RP, label=waterYear))+
+  geom_hline(yintercept=mean(annual_RP$RP), color="red")+
+  geom_hline(yintercept=1, color="grey", linetype="dashed")+
+  geom_col()+
+  coord_cartesian(clip = "off") +
+  geom_text_repel(box.padding = 0.5, max.overlaps = 1) 
 

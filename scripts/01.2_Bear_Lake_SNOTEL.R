@@ -45,7 +45,7 @@ snow_data %>%
   geom_line()+
   geom_vline(xintercept=SWE_stats$max_swe_date,
              color="red") +
-  geom_vline(xintercept=SWE_stats$first_snow_melt,
+  geom_vline(xintercept=SWE_stats$last_snow_melt,
              color="blue") +
   facet_wrap(.~waterYear, scales="free_x")
 
@@ -56,4 +56,21 @@ SWE_stats <- SWE_stats %>%
          cont_snow_acc_wydoy = hydro.day(cont_snow_acc),
          first_snow_melt_wydoy = hydro.day(first_snow_melt),
          last_snow_melt_wydoy = hydro.day(last_snow_melt),
-         max_swe_wydoy = hydro.day(max_swe_date))
+         max_swe_wydoy = hydro.day(max_swe_date),
+         snow_melt_duration = first_snow_melt_wydoy - max_swe_wydoy)
+
+# Plot date of max SWE of time, last snow melt, and the distance between the two dates
+SWE_stats %>%
+  select(year, max_swe_wydoy, max_swe) %>%
+  pivot_longer(-year) %>%
+  mutate(name = recode(name, max_swe_wydoy = "Date of max. SWE", max_swe = "Max SWE (cm)")) %>%
+  ggplot(aes(x=year, y=value, fill=name))+
+  geom_point(shape=21, size=2)+
+  # geom_smooth(method="lm")+
+  facet_wrap(.~name, scales="free_y", nrow=2)+
+  scale_fill_manual(values=c("#E69F00", "#56B4E9"))+
+  theme_few(base_size=16)+
+  theme(legend.position="none")+
+  labs(x="Year", y = "Value")
+ggsave("figures/bear_lake_SWE.png", dpi=600, units="in", height=5, width=3)
+

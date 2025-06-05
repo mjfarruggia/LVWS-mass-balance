@@ -4,6 +4,9 @@ source("scripts/00_libraries.R")
 #(temp, cond, and other exist at different timescales but we'll just pull Q for now)
 
 
+# Flow! -------------------------------------------------------------------
+
+
 ## This is old code from stored .csv files. I don't think this is needd
 ## anymore since we can just get it all from dataRetrieval?
 
@@ -137,7 +140,8 @@ percentile_days %>%
 percentile_days %>%
   ggplot(aes(x=waterYear, y=day_50th_wydoy-day_20th_wydoy))+
   geom_point()+
-  geom_smooth(method="lm")
+  geom_smooth(method="lm")+
+  labs(title="# days from start of snowmelt to peak")
 lm1<- lm(day_50th_wydoy-day_20th_wydoy~waterYear, data=percentile_days)
 summary(lm1) #modest, 1.6 days per decade shorter duration of snowmelt start to peak
 
@@ -152,7 +156,8 @@ percentile_days %>%
 percentile_days %>%
   ggplot(aes(x=waterYear, y=day_80th_wydoy-day_20th_wydoy))+
   geom_point()+
-  geom_smooth(method="lm")
+  geom_smooth(method="lm")+
+  labs(title="# days from start of snowmelt to baseflow")
 lm2<- lm(day_80th_wydoy-day_20th_wydoy~waterYear, data=percentile_days)
 summary(lm2) #modest, 2.4 days per decade shorter duration of snowmelt start to baseflow
 
@@ -178,123 +183,140 @@ LochQ %>%
   facet_wrap(.~waterYear, scales="free_x")
 
 
-LochO_chem <-
-  read.csv(
-    "data/LVWS_waterchem_master.csv",
-    sep = ",",
-    header = TRUE,
-    skip = 1,
-    na.strings = c("", " ", "NA")
-  ) %>%
-  select(-X) %>%
-  rename(
-    site_id = SITE.ID,
-    SODIUM = NA.,
-    FLUORINE = `F`,
-    NH4_calc = NH4.calc,
-    NO3_calc = NO3.calc,
-    TDN_calc = TDN.calc,
-    PO4_NREL_calc = PO4_NREL.calc,
-    TP_NREL_calc = TP_NREL.calc
-  ) %>%
-  mutate(
-    DATE = mdy(`DATE`),
-    NO3_calc = case_when( #override old column
-      NO3 == "<0.01" ~ 0.005,
-      NO3 == "<0.02" ~ 0.01,
-      NO3 == "<0.03" ~ 0.015,
-      TRUE ~ as.numeric(NO3)
-    ),
-    NH4_calc = case_when(
-      NH4 == "<0.01" ~ 0.005,
-      NH4 == "0" ~ 0.005, #check w Jill if this is actually how we wanna treat zeros
-      TRUE ~ as.numeric(NH4)
-    )) %>%
-  filter(SITE=="LOCH.O" | SITE=="LOCH.O ") %>%
-  filter(TYPE == "NORMAL") %>%
-  mutate(waterYear = calcWaterYear(DATE)) %>%
-  mutate(across(TEMP:ncol(.), as.numeric))
-length(unique(LochO_chem$DATE)) # There are some duplicate dates-- why?
+# Chemistry! --------------------------------------------------------------
 
-#For now take mean of everything for multiple day entries, but ask Jill about this
-LochO_chem <- LochO_chem %>%
-  group_by(DATE) %>%
-  summarise(across(TEMP:waterYear, ~ mean(.x, na.rm = TRUE))) %>%
-  mutate(across(TEMP:waterYear, ~ ifelse(is.nan(.), NA, .)))
+Loch_chem <- read.csv("data/LV_chemistry_4Jun2025_MJF.csv") %>%
+  filter(site == "loch" & sampleType == "norm") %>%
+  group_by(site, sampleLocation, date, parameter) %>%
+  #For now take mean of everything for multiple day entries, but ask Jill about this
+  summarize(value = mean(value, na.rm=TRUE)) %>%
+  mutate(waterYear = calcWaterYear(date),
+         date = ymd(date))
+head(Loch_chem)
+
+LochO_chem <- Loch_chem %>%
+  filter(sampleLocation == "out")
+
+## Old code below
+# LochO_chem <-
+#   read.csv(
+#     "data/LVWS_waterchem_master.csv",
+#     sep = ",",
+#     header = TRUE,
+#     skip = 1,
+#     na.strings = c("", " ", "NA")
+#   ) %>%
+#   select(-X) %>%
+#   rename(
+#     site_id = SITE.ID,
+#     SODIUM = NA.,
+#     FLUORINE = `F`,
+#     NH4_calc = NH4.calc,
+#     NO3_calc = NO3.calc,
+#     TDN_calc = TDN.calc,
+#     PO4_NREL_calc = PO4_NREL.calc,
+#     TP_NREL_calc = TP_NREL.calc
+#   ) %>%
+#   mutate(
+#     DATE = mdy(`DATE`),
+#     NO3_calc = case_when( #override old column
+#       NO3 == "<0.01" ~ 0.005,
+#       NO3 == "<0.02" ~ 0.01,
+#       NO3 == "<0.03" ~ 0.015,
+#       TRUE ~ as.numeric(NO3)
+#     ),
+#     NH4_calc = case_when(
+#       NH4 == "<0.01" ~ 0.005,
+#       NH4 == "0" ~ 0.005, #check w Jill if this is actually how we wanna treat zeros
+#       TRUE ~ as.numeric(NH4)
+#     )) %>%
+#   filter(SITE=="LOCH.O" | SITE=="LOCH.O ") %>%
+#   filter(TYPE == "NORMAL") %>%
+#   mutate(waterYear = calcWaterYear(DATE)) %>%
+#   mutate(across(TEMP:ncol(.), as.numeric))
+# length(unique(LochO_chem$DATE)) # There are some duplicate dates-- why?
+
+# For now take mean of everything for multiple day entries, but ask Jill about this
+# LochO_chem <- LochO_chem %>%
+#   group_by(DATE) %>%
+#   summarise(across(TEMP:waterYear, ~ mean(.x, na.rm = TRUE))) %>%
+#   mutate(across(TEMP:waterYear, ~ ifelse(is.nan(.), NA, .)))
 
 #Add in missing data from 2019 and 2020
-LochO_chem2 <- 
-  read.csv(
-    "data/LVWS_2019_2020_master.csv",
-    sep = ",",
-    skip = 1,
-    header = TRUE,
-    na.strings = c("", " ", "NA"),
-    strip.white = TRUE
-  ) %>%
-  rename(
-    site_id = SITE.ID,
-    SODIUM = NA.,
-    FLUORINE = `F`,
-    NH4_calc = NH4.calc,
-    NO3_calc = NO3.calc,
-    TDN_calc = TDN.calc,
-    PO4_NREL_calc = PO4_NREL.calc,
-    TP_NREL_calc = TP_NREL.calc
-  ) %>%
-  mutate(
-    DATE = mdy(`DATE`),
-    NO3_calc = case_when( #override old column
-      NO3 == "<0.01" ~ 0.005,
-      NO3 == "<0.02" ~ 0.01,
-      NO3 == "<0.03" ~ 0.015,
-      TRUE ~ as.numeric(NO3)
-    ),
-    NH4_calc = case_when(
-      NH4 == "<0.01" ~ 0.005,
-      NH4 == "0" ~ 0.005, #check w Jill if this is actually how we wanna treat zeros
-      TRUE ~ as.numeric(NH4)
-    )) %>%
-  filter(SITE=="LOCH.O" | SITE=="LOCH.O ") %>%
-  filter(TYPE == "NORMAL") %>%
-  mutate(waterYear = calcWaterYear(DATE)) %>%
-  mutate(across(TEMP:ncol(.), as.numeric))
+# LochO_chem2 <- 
+#   read.csv(
+#     "data/LVWS_2019_2020_master.csv",
+#     sep = ",",
+#     skip = 1,
+#     header = TRUE,
+#     na.strings = c("", " ", "NA"),
+#     strip.white = TRUE
+#   ) %>%
+#   rename(
+#     site_id = SITE.ID,
+#     SODIUM = NA.,
+#     FLUORINE = `F`,
+#     NH4_calc = NH4.calc,
+#     NO3_calc = NO3.calc,
+#     TDN_calc = TDN.calc,
+#     PO4_NREL_calc = PO4_NREL.calc,
+#     TP_NREL_calc = TP_NREL.calc
+#   ) %>%
+#   mutate(
+#     DATE = mdy(`DATE`),
+#     NO3_calc = case_when( #override old column
+#       NO3 == "<0.01" ~ 0.005,
+#       NO3 == "<0.02" ~ 0.01,
+#       NO3 == "<0.03" ~ 0.015,
+#       TRUE ~ as.numeric(NO3)
+#     ),
+#     NH4_calc = case_when(
+#       NH4 == "<0.01" ~ 0.005,
+#       NH4 == "0" ~ 0.005, #check w Jill if this is actually how we wanna treat zeros
+#       TRUE ~ as.numeric(NH4)
+#     )) %>%
+#   filter(SITE=="LOCH.O" | SITE=="LOCH.O ") %>%
+#   filter(TYPE == "NORMAL") %>%
+#   mutate(waterYear = calcWaterYear(DATE)) %>%
+#   mutate(across(TEMP:ncol(.), as.numeric))
 
-LochO_chem <- bind_rows(LochO_chem, LochO_chem2)
+# LochO_chem <- bind_rows(LochO_chem, LochO_chem2)
 
 #Find dupes
-DUPES <- LochO_chem[duplicated(LochO_chem$DATE)|duplicated(LochO_chem$DATE, fromLast=TRUE),]
+# DUPES <- LochO_chem[duplicated(LochO_chem$DATE)|duplicated(LochO_chem$DATE, fromLast=TRUE),]
 #There's some redundancy. Take the mean of the 2 (they are identical)
 
-LochO_chem <- LochO_chem %>%
-  group_by(DATE) %>%
-  summarise(across(TEMP:waterYear, ~ mean(.x, na.rm = TRUE))) %>%
-  mutate(across(TEMP:waterYear, ~ ifelse(is.nan(.), NA, .)))
+# LochO_chem <- LochO_chem %>%
+#   group_by(DATE) %>%
+#   summarise(across(TEMP:waterYear, ~ mean(.x, na.rm = TRUE))) %>%
+#   mutate(across(TEMP:waterYear, ~ ifelse(is.nan(.), NA, .)))
+
+# length(unique(LochO_chem$DATE))
+
+# #Check for missing data
+# vis_miss(Loch_chem)
+# 
+# #Check for missing data
+# vis_miss(LochO_chem %>% filter(waterYear == 1989))
 
 
-length(unique(LochO_chem$DATE))
-
-#Check for missing data
-vis_miss(LochO_chem)
-
-#Check for missing data
-vis_miss(LochO_chem %>% filter(waterYear == 1989))
-
-
-outlet_raw <- LochQ %>%
-  select(date, Q_m3s) %>%
-  left_join(., LochO_chem, by=c("date"="DATE","waterYear")) %>%
+outlet_raw <- data.frame(LochQ) %>%
+  select(date, waterYear, Q_m3s) %>%
+  left_join(., LochO_chem, by=c("date","waterYear")) %>%
   left_join(., percentile_days %>% select(waterYear, day_20th_wydoy:day_80th_wydoy), by="waterYear") %>%
   mutate(wy_doy = hydro.day(date))
 
-
-outlet_raw %>%
-  select(wy_doy, waterYear,NO3_calc, Q_m3s) %>%
-  pivot_longer(-c(wy_doy, waterYear)) %>%
-  ggplot(aes(x=wy_doy, y=value, color=name))+
+unique(outlet_raw$parameter)
+LochO_chem %>%
+  filter(parameter=="no3_mgl") %>%
+  filter(waterYear=="2022") %>%
+  mutate(wy_doy = hydro.day(date)) %>%
+  select(wy_doy, waterYear,parameter, value) %>%
+  ggplot(aes(x=wy_doy, y=value))+
   geom_point()+
-  facet_wrap(name ~ waterYear)
-#Confirmeed that year-round Q and NO3 start in 1991. 1984-1991 will only use summer values
+  facet_wrap(. ~ waterYear)
+# Confirmeed that year-round Q and NO3 start in 1991. 1984-1991 will only use summer values
+# Gap in 2022 - will let MJ know about it. I think I tracked down the missing data
 
 #For now, work only with WY 1991 to present
 
@@ -347,19 +369,19 @@ outlet_raw %>%
 ## WEEKLY flux esimates instead
 # 
 outlet_raw_weekly <- LochO_chem %>%
-  left_join(., LochQ %>% select(date, Q_m3s), by=c("DATE"="date","waterYear")) %>%
+  left_join(., LochQ %>% select(date, Q_m3s), by=c("date","waterYear")) %>%
   left_join(., percentile_days %>% select(waterYear, day_20th_wydoy:day_80th_wydoy), by="waterYear") %>%
-  mutate(wy_doy = hydro.day(DATE))
+  mutate(wy_doy = hydro.day(date))
 # 
 # outlet_weekly_flux <- outlet_raw_weekly %>%
 #   filter(waterYear <= 2021) %>%
 #   mutate(weekofyear = week(DATE)) %>%
-#   mutate(cations_mgL = CA + MG + SODIUM + K,
+#   mutate(cations_mgl = CA + MG + SODIUM + K,
 #          inorganicN_mgL = NO3_calc + NH4_calc) %>%
 #   # select(-c(CA, MG, SODIUM, K)) %>%
 #   # If there are multiple samples in a week, just get the mean
-#   select(DATE, waterYear, weekofyear, Q_m3s, SO4, cations_mgL, NH4_calc, NO3_calc, inorganicN_mgL, SiO2) %>%
-#   pivot_longer(c(SO4, cations_mgL, NH4_calc, NO3_calc, inorganicN_mgL, SiO2),
+#   select(DATE, waterYear, weekofyear, Q_m3s, SO4, cations_mgl, NH4_calc, NO3_calc, inorganicN_mgL, SiO2) %>%
+#   pivot_longer(c(SO4, cations_mgl, NH4_calc, NO3_calc, inorganicN_mgL, SiO2),
 #                names_to = "chem_name",
 #                values_to = "chem_value") %>% #units for all are mg/L
 #   group_by(chem_name, waterYear, weekofyear) %>% 
@@ -379,7 +401,7 @@ outlet_raw_weekly <- LochO_chem %>%
 #          flux_kg_per_ha = flux_kg_week / 660) %>%#kg per week 
 #   mutate(chem_name = case_match(
 #     chem_name,
-#     "cations_mgL" ~ "cations",
+#     "cations_mgl" ~ "cations",
 #     "inorganicN_mgL" ~ "inorganic N",
 #     "NH4_calc" ~ "NH4",
 #     "NO3_calc" ~ "NO3",
@@ -400,39 +422,43 @@ outlet_raw_weekly <- LochO_chem %>%
 #Start with daily interpolated chem values, join with daily flow
 #then do the flux calculation
 #why the eff are they so high?
-
+unique(LochO_chem$parameter)
 outlet_weekly_flux <- LochO_chem %>%
-  filter(waterYear >= 1984 & waterYear <= 2021) %>%
-  mutate(cations_mgL = CA + MG + SODIUM + K) %>%
-  select(DATE, waterYear, SO4, cations_mgL, NH4_calc, NO3_calc, SiO2) %>%
-  pivot_longer(c(SO4, cations_mgL, NH4_calc, NO3_calc, SiO2),
+  filter(waterYear >= 1984 & waterYear <= 2023) %>%
+  pivot_wider(names_from = parameter, values_from = value) %>%
+  mutate(cations_mgl = ca_mgl + mg_mgl + na_mgl + k_mgl) %>% 
+  select(date, waterYear, so4_mgl, cations_mgl, nh4_mgl, no3_mgl, sio2_mgl) %>%
+  pivot_longer(c(so4_mgl, cations_mgl, nh4_mgl, no3_mgl, sio2_mgl),
                names_to = "chem_name",
                values_to = "chem_value") %>% #units for all are mg/L
   # group_by(chem_name, waterYear, weekofyear) %>% 
   # summarize(chem_value = median(chem_value, na.rm=TRUE)) %>% #take the median if >1 sample per week
-  arrange(chem_name, waterYear, DATE) %>%
-  as_tsibble(., key = c(chem_name,waterYear), index = DATE) %>% #time series tibble
+  arrange(chem_name, waterYear, date) %>%
+  as_tsibble(., key = c(chem_name, waterYear), index = date) %>% #time series tibble
   fill_gaps() %>%
   as.data.frame() %>%
-  arrange(chem_name, waterYear, DATE) %>%
-  mutate(weekofyear = week(DATE)) %>%
+  arrange(chem_name, waterYear, date) %>%
+  mutate(weekofyear = week(date)) %>%
   group_by(chem_name) %>%
   mutate(chem_value = imputeTS::na_interpolation(chem_value, maxgap = 30)) %>%
-  left_join(., LochQ %>% select(waterYear, date, Q_m3s), by=c("DATE"="date","waterYear"),
+  left_join(., LochQ %>% select(waterYear, date, Q_m3s), by=c("date","waterYear"),
             relationship = "many-to-many") %>%
   mutate(chem_name = case_match(
     chem_name,
-    "cations_mgL" ~ "cations",
+    "cations_mgl" ~ "cations",
     # "inorganicN_mgL" ~ "inorganic N",
-    "NH4_calc" ~ "NH4-N",
-    "NO3_calc" ~ "NO3-N",
+    "nh4_mgl" ~ "NH4-N",
+    "no3_mgl" ~ "NO3-N",
     "SO4" ~ "SO4-S",
     .default = chem_name
   )) %>%
-  distinct(DATE, chem_name, .keep_all = TRUE) %>%
+  distinct(date, chem_name, .keep_all = TRUE) %>%
   mutate(chem_value = case_when(chem_name == "NO3-N" ~ chem_value * 0.226,
+                                #The conversion factor is the ratio of the molar mass of N, 14 to the molar mass of NO3, 62
                                 chem_name == "NH4-N" ~ chem_value * 0.777,
+                                # conv. fact. is molar mass of N, 14 divided by molar mass of NH4 18
                                 chem_name == "SO4-S" ~ chem_value * 0.333,
+                                # conv. fact. s molar mass of S, 32 divided by molar mass of SO4, 96
                                 TRUE ~ chem_value)) %>%
   group_by(waterYear) %>%
   mutate(daily_flux_kg = chem_value * Q_m3s * 86.4)  #kg per week 
@@ -443,8 +469,6 @@ outlet_weekly_flux <- LochO_chem %>%
 #Calculate the fluxes at various timescales
 annual_flux <- outlet_weekly_flux %>%
   mutate(
-    # Convert date to Date type if not already
-    date = as.Date(DATE),
     month = month(date)
   ) %>%
   group_by(waterYear, chem_name) %>%
@@ -457,8 +481,6 @@ annual_flux <- outlet_weekly_flux %>%
     
 summer_flux <- outlet_weekly_flux %>%
   mutate(
-    # Convert date to Date type if not already
-    date = as.Date(DATE),
     month = month(date)
   ) %>%
   filter(month %in% c(6,7,8)) %>%
@@ -472,8 +494,6 @@ summer_flux <- outlet_weekly_flux %>%
 
 june_flux <- outlet_weekly_flux %>%
   mutate(
-    # Convert date to Date type if not already
-    date = as.Date(DATE),
     month = month(date)
   ) %>%
   filter(month %in% c(6)) %>%
@@ -487,8 +507,6 @@ june_flux <- outlet_weekly_flux %>%
 
 july_flux <- outlet_weekly_flux %>%
   mutate(
-    # Convert date to Date type if not already
-    date = as.Date(DATE),
     month = month(date)
   ) %>%
   filter(month %in% c(7)) %>%
@@ -502,8 +520,6 @@ july_flux <- outlet_weekly_flux %>%
 
 august_flux <- outlet_weekly_flux %>%
   mutate(
-    # Convert date to Date type if not already
-    date = as.Date(DATE),
     month = month(date)
   ) %>%
   filter(month %in% c(8)) %>%
@@ -523,7 +539,7 @@ source("scripts/01.3_NADP_CO98.R")
 head(LochQ)
 head(NADP)
 
-Q_weekly <- LochQ %>%
+Q_weekly <- data.frame(LochQ) %>%
   mutate(weekofyear = week(date),
          Q_m3 = Q_m3s * 86400) %>%
   group_by(waterYear, weekofyear) %>%

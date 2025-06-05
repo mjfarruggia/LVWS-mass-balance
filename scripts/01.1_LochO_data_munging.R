@@ -197,116 +197,13 @@ head(Loch_chem)
 LochO_chem <- Loch_chem %>%
   filter(sampleLocation == "out")
 
-## Old code below
-# LochO_chem <-
-#   read.csv(
-#     "data/LVWS_waterchem_master.csv",
-#     sep = ",",
-#     header = TRUE,
-#     skip = 1,
-#     na.strings = c("", " ", "NA")
-#   ) %>%
-#   select(-X) %>%
-#   rename(
-#     site_id = SITE.ID,
-#     SODIUM = NA.,
-#     FLUORINE = `F`,
-#     NH4_calc = NH4.calc,
-#     NO3_calc = NO3.calc,
-#     TDN_calc = TDN.calc,
-#     PO4_NREL_calc = PO4_NREL.calc,
-#     TP_NREL_calc = TP_NREL.calc
-#   ) %>%
-#   mutate(
-#     DATE = mdy(`DATE`),
-#     NO3_calc = case_when( #override old column
-#       NO3 == "<0.01" ~ 0.005,
-#       NO3 == "<0.02" ~ 0.01,
-#       NO3 == "<0.03" ~ 0.015,
-#       TRUE ~ as.numeric(NO3)
-#     ),
-#     NH4_calc = case_when(
-#       NH4 == "<0.01" ~ 0.005,
-#       NH4 == "0" ~ 0.005, #check w Jill if this is actually how we wanna treat zeros
-#       TRUE ~ as.numeric(NH4)
-#     )) %>%
-#   filter(SITE=="LOCH.O" | SITE=="LOCH.O ") %>%
-#   filter(TYPE == "NORMAL") %>%
-#   mutate(waterYear = calcWaterYear(DATE)) %>%
-#   mutate(across(TEMP:ncol(.), as.numeric))
-# length(unique(LochO_chem$DATE)) # There are some duplicate dates-- why?
+# outlet_raw <- data.frame(LochQ) %>%
+#   select(date, waterYear, Q_m3s) %>%
+#   left_join(., LochO_chem, by=c("date","waterYear")) %>%
+#   left_join(., percentile_days %>% select(waterYear, day_20th_wydoy:day_80th_wydoy), by="waterYear") %>%
+#   mutate(wy_doy = hydro.day(date))
 
-# For now take mean of everything for multiple day entries, but ask Jill about this
-# LochO_chem <- LochO_chem %>%
-#   group_by(DATE) %>%
-#   summarise(across(TEMP:waterYear, ~ mean(.x, na.rm = TRUE))) %>%
-#   mutate(across(TEMP:waterYear, ~ ifelse(is.nan(.), NA, .)))
-
-#Add in missing data from 2019 and 2020
-# LochO_chem2 <- 
-#   read.csv(
-#     "data/LVWS_2019_2020_master.csv",
-#     sep = ",",
-#     skip = 1,
-#     header = TRUE,
-#     na.strings = c("", " ", "NA"),
-#     strip.white = TRUE
-#   ) %>%
-#   rename(
-#     site_id = SITE.ID,
-#     SODIUM = NA.,
-#     FLUORINE = `F`,
-#     NH4_calc = NH4.calc,
-#     NO3_calc = NO3.calc,
-#     TDN_calc = TDN.calc,
-#     PO4_NREL_calc = PO4_NREL.calc,
-#     TP_NREL_calc = TP_NREL.calc
-#   ) %>%
-#   mutate(
-#     DATE = mdy(`DATE`),
-#     NO3_calc = case_when( #override old column
-#       NO3 == "<0.01" ~ 0.005,
-#       NO3 == "<0.02" ~ 0.01,
-#       NO3 == "<0.03" ~ 0.015,
-#       TRUE ~ as.numeric(NO3)
-#     ),
-#     NH4_calc = case_when(
-#       NH4 == "<0.01" ~ 0.005,
-#       NH4 == "0" ~ 0.005, #check w Jill if this is actually how we wanna treat zeros
-#       TRUE ~ as.numeric(NH4)
-#     )) %>%
-#   filter(SITE=="LOCH.O" | SITE=="LOCH.O ") %>%
-#   filter(TYPE == "NORMAL") %>%
-#   mutate(waterYear = calcWaterYear(DATE)) %>%
-#   mutate(across(TEMP:ncol(.), as.numeric))
-
-# LochO_chem <- bind_rows(LochO_chem, LochO_chem2)
-
-#Find dupes
-# DUPES <- LochO_chem[duplicated(LochO_chem$DATE)|duplicated(LochO_chem$DATE, fromLast=TRUE),]
-#There's some redundancy. Take the mean of the 2 (they are identical)
-
-# LochO_chem <- LochO_chem %>%
-#   group_by(DATE) %>%
-#   summarise(across(TEMP:waterYear, ~ mean(.x, na.rm = TRUE))) %>%
-#   mutate(across(TEMP:waterYear, ~ ifelse(is.nan(.), NA, .)))
-
-# length(unique(LochO_chem$DATE))
-
-# #Check for missing data
-# vis_miss(Loch_chem)
-# 
-# #Check for missing data
-# vis_miss(LochO_chem %>% filter(waterYear == 1989))
-
-
-outlet_raw <- data.frame(LochQ) %>%
-  select(date, waterYear, Q_m3s) %>%
-  left_join(., LochO_chem, by=c("date","waterYear")) %>%
-  left_join(., percentile_days %>% select(waterYear, day_20th_wydoy:day_80th_wydoy), by="waterYear") %>%
-  mutate(wy_doy = hydro.day(date))
-
-unique(outlet_raw$parameter)
+unique(LochO_chem$parameter)
 LochO_chem %>%
   filter(parameter=="no3_mgl") %>%
   filter(waterYear=="2022") %>%
@@ -368,62 +265,19 @@ LochO_chem %>%
 
 ## WEEKLY flux esimates instead
 # 
-outlet_raw_weekly <- LochO_chem %>%
-  left_join(., LochQ %>% select(date, Q_m3s), by=c("date","waterYear")) %>%
-  left_join(., percentile_days %>% select(waterYear, day_20th_wydoy:day_80th_wydoy), by="waterYear") %>%
-  mutate(wy_doy = hydro.day(date))
-# 
-# outlet_weekly_flux <- outlet_raw_weekly %>%
-#   filter(waterYear <= 2021) %>%
-#   mutate(weekofyear = week(DATE)) %>%
-#   mutate(cations_mgl = CA + MG + SODIUM + K,
-#          inorganicN_mgL = NO3_calc + NH4_calc) %>%
-#   # select(-c(CA, MG, SODIUM, K)) %>%
-#   # If there are multiple samples in a week, just get the mean
-#   select(DATE, waterYear, weekofyear, Q_m3s, SO4, cations_mgl, NH4_calc, NO3_calc, inorganicN_mgL, SiO2) %>%
-#   pivot_longer(c(SO4, cations_mgl, NH4_calc, NO3_calc, inorganicN_mgL, SiO2),
-#                names_to = "chem_name",
-#                values_to = "chem_value") %>% #units for all are mg/L
-#   group_by(chem_name, waterYear, weekofyear) %>% 
-#   summarize(chem_value = median(chem_value, na.rm=TRUE),
-#             Q_m3s = median(Q_m3s, na.rm=TRUE)) %>% #take the median if >1 sample per week
-#   arrange(chem_name, waterYear, weekofyear) %>%
-#   as_tsibble(., key = c(chem_name,waterYear), index = weekofyear) %>% #time series tibble
-#   fill_gaps() %>%
-#   as.data.frame() %>%
-#   arrange(chem_name, waterYear, weekofyear) %>%
-#   group_by(chem_name) %>%
-#   mutate(chem_value = imputeTS::na_interpolation(chem_value, maxgap = 3),
-#          Q_m3s = imputeTS::na_interpolation(Q_m3s, maxgap = 3)) %>%
-#   group_by(chem_name, waterYear, weekofyear) %>%
-#   mutate(flux_mg_s = chem_value * Q_m3s * 1000, #1000 L per m3
-#          flux_kg_week = flux_mg_s * 86400 * 10e-6 * 7, #add * 7 potentially
-#          flux_kg_per_ha = flux_kg_week / 660) %>%#kg per week 
-#   mutate(chem_name = case_match(
-#     chem_name,
-#     "cations_mgl" ~ "cations",
-#     "inorganicN_mgL" ~ "inorganic N",
-#     "NH4_calc" ~ "NH4",
-#     "NO3_calc" ~ "NO3",
-#     .default = chem_name
-#   ))
-  
+# outlet_raw_weekly <- LochO_chem %>%
+#   left_join(., LochQ %>% select(date, Q_m3s), by=c("date","waterYear")) %>%
+#   left_join(., percentile_days %>% select(waterYear, day_20th_wydoy:day_80th_wydoy), by="waterYear") %>%
+#   mutate(wy_doy = hydro.day(date))
 
-# vis_miss(outlet_weekly_flux %>% pivot_wider(names_from = chem_name,
-#                                             values_from = chem_value))
 
-  
-######################
-######################
-######################
-## THIS IS THE WAY####
-## NEED TO CLEAN #####
+# THIS IS THE WAY, CLEAN ME
 
 #Start with daily interpolated chem values, join with daily flow
 #then do the flux calculation
 #why the eff are they so high?
 unique(LochO_chem$parameter)
-outlet_weekly_flux <- LochO_chem %>%
+LochO_chem_daily <- LochO_chem %>%
   filter(waterYear >= 1984 & waterYear <= 2023) %>%
   pivot_wider(names_from = parameter, values_from = value) %>%
   mutate(cations_mgl = ca_mgl + mg_mgl + na_mgl + k_mgl) %>% 
@@ -438,9 +292,14 @@ outlet_weekly_flux <- LochO_chem %>%
   fill_gaps() %>%
   as.data.frame() %>%
   arrange(chem_name, waterYear, date) %>%
-  mutate(weekofyear = week(date)) %>%
+  mutate(weekofyear = week(date),
+         site = "loch",
+         sampleLocation = "out") %>%
   group_by(chem_name) %>%
-  mutate(chem_value = imputeTS::na_interpolation(chem_value, maxgap = 30)) %>%
+  mutate(chem_value = imputeTS::na_interpolation(chem_value, maxgap = 30))
+
+
+outlet_daily_flux <- LochO_chem_daily %>%
   left_join(., LochQ %>% select(waterYear, date, Q_m3s), by=c("date","waterYear"),
             relationship = "many-to-many") %>%
   mutate(chem_name = case_match(
@@ -464,10 +323,8 @@ outlet_weekly_flux <- LochO_chem %>%
   mutate(daily_flux_kg = chem_value * Q_m3s * 86.4)  #kg per week 
 
 
-
-
 #Calculate the fluxes at various timescales
-annual_flux <- outlet_weekly_flux %>%
+annual_flux <- outlet_daily_flux %>%
   mutate(
     month = month(date)
   ) %>%
@@ -479,7 +336,7 @@ annual_flux <- outlet_weekly_flux %>%
     # Calculate annual flux per hectare
     annual_flux_kg_per_ha = annual_flux_kg / 660)
     
-summer_flux <- outlet_weekly_flux %>%
+summer_flux <- outlet_daily_flux %>%
   mutate(
     month = month(date)
   ) %>%
@@ -492,7 +349,7 @@ summer_flux <- outlet_weekly_flux %>%
     # Calculate annual flux per hectare
     summer_flux_kg_per_ha = summer_flux_kg / 660)
 
-june_flux <- outlet_weekly_flux %>%
+june_flux <- outlet_daily_flux %>%
   mutate(
     month = month(date)
   ) %>%
@@ -505,7 +362,7 @@ june_flux <- outlet_weekly_flux %>%
     # Calculate annual flux per hectare
     june_flux_kg_per_ha = june_flux_kg / 660)
 
-july_flux <- outlet_weekly_flux %>%
+july_flux <- outlet_daily_flux %>%
   mutate(
     month = month(date)
   ) %>%
@@ -518,7 +375,7 @@ july_flux <- outlet_weekly_flux %>%
     # Calculate annual flux per hectare
     july_flux_kg_per_ha = july_flux_kg / 660)
 
-august_flux <- outlet_weekly_flux %>%
+august_flux <- outlet_daily_flux %>%
   mutate(
     month = month(date)
   ) %>%

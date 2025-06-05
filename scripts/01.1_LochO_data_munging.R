@@ -133,8 +133,17 @@ percentile_days <- data.frame(LochQ) %>%
 
 # Check this works
 percentile_days %>%
+  ggplot(aes(x=waterYear, y=day_20th_wydoy))+
+  geom_point()
+
+percentile_days %>%
   ggplot(aes(x=waterYear, y=day_50th_wydoy))+
   geom_point()
+
+percentile_days %>%
+  ggplot(aes(x=waterYear, y=day_80th_wydoy))+
+  geom_point()
+
 
 # Changes in days from snowmelt to peak? 
 percentile_days %>%
@@ -281,8 +290,8 @@ LochO_chem_daily <- LochO_chem %>%
   filter(waterYear >= 1984 & waterYear <= 2023) %>%
   pivot_wider(names_from = parameter, values_from = value) %>%
   mutate(cations_mgl = ca_mgl + mg_mgl + na_mgl + k_mgl) %>% 
-  select(date, waterYear, so4_mgl, cations_mgl, nh4_mgl, no3_mgl, sio2_mgl) %>%
-  pivot_longer(c(so4_mgl, cations_mgl, nh4_mgl, no3_mgl, sio2_mgl),
+  select(date, waterYear, so4_mgl, cations_mgl, nh4_mgl, no3_mgl, sio2_mgl, doc_mgl) %>%
+  pivot_longer(c(so4_mgl, cations_mgl, nh4_mgl, no3_mgl, sio2_mgl,doc_mgl),
                names_to = "chem_name",
                values_to = "chem_value") %>% #units for all are mg/L
   # group_by(chem_name, waterYear, weekofyear) %>% 
@@ -308,7 +317,8 @@ outlet_daily_flux <- LochO_chem_daily %>%
     # "inorganicN_mgL" ~ "inorganic N",
     "nh4_mgl" ~ "NH4-N",
     "no3_mgl" ~ "NO3-N",
-    "SO4" ~ "SO4-S",
+    "so4_mgl" ~ "SO4-S",
+    "doc_mgl" ~ "DOC",
     .default = chem_name
   )) %>%
   distinct(date, chem_name, .keep_all = TRUE) %>%

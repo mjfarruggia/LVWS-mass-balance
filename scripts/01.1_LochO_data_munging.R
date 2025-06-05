@@ -128,9 +128,54 @@ percentile_days <- data.frame(LochQ) %>%
     day_80th_wydoy = hydro.day(day_80th)
   )
 
+# Check this works
 percentile_days %>%
   ggplot(aes(x=waterYear, y=day_50th_wydoy))+
   geom_point()
+
+# Changes in days from snowmelt to peak? 
+percentile_days %>%
+  ggplot(aes(x=waterYear, y=day_50th_wydoy-day_20th_wydoy))+
+  geom_point()+
+  geom_smooth(method="lm")
+lm1<- lm(day_50th_wydoy-day_20th_wydoy~waterYear, data=percentile_days)
+summary(lm1) #modest, 1.6 days per decade shorter duration of snowmelt start to peak
+
+# or peak to baseflow?
+percentile_days %>%
+  ggplot(aes(x=waterYear, y=day_80th_wydoy-day_50th_wydoy))+
+  geom_point()+
+  geom_smooth(method="lm")
+# No
+
+# Or start to baseflow? 
+percentile_days %>%
+  ggplot(aes(x=waterYear, y=day_80th_wydoy-day_20th_wydoy))+
+  geom_point()+
+  geom_smooth(method="lm")
+lm2<- lm(day_80th_wydoy-day_20th_wydoy~waterYear, data=percentile_days)
+summary(lm2) #modest, 2.4 days per decade shorter duration of snowmelt start to baseflow
+
+
+
+# Plot dates over raw. Look reasonable?
+# Cumulative flow
+LochQ %>%
+  ggplot(aes(x=date, y=cumulative_dis))+
+  geom_point()+
+  geom_vline(xintercept=percentile_days$day_20th, color="blue")+
+  geom_vline(xintercept=percentile_days$day_50th, color="green")+
+  geom_vline(xintercept=percentile_days$day_80th, color="red")+
+  facet_wrap(.~waterYear, scales="free_x")
+
+# Raw discharge
+LochQ %>%
+  ggplot(aes(x=date, y=Q_m3s))+
+  geom_line()+
+  geom_vline(xintercept=percentile_days$day_20th, color="blue")+
+  geom_vline(xintercept=percentile_days$day_50th, color="green")+
+  geom_vline(xintercept=percentile_days$day_80th, color="red")+
+  facet_wrap(.~waterYear, scales="free_x")
 
 
 LochO_chem <-

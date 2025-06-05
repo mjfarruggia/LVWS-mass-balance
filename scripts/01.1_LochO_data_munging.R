@@ -3,26 +3,30 @@ source("scripts/00_libraries.R")
 #Pull in the disparate .csv files with loch outlet Q data
 #(temp, cond, and other exist at different timescales but we'll just pull Q for now)
 
-Q_1983to2010 <- read_csv(here("data/LochO_DailyData_19830930-20231208.csv"), skip=29, col_names = TRUE) %>%
-  slice(-1) %>% #Get rid of the first row, erroneous subheader
-  mutate(date = mdy(datetime),
-         Q_cfs = `250142_00060_00003`,
-         Q_cfs = as.numeric(Q_cfs)) %>%
-  select(-c(datetime, site_no, `250142_00060_00003_cd`, `250142_00060_00003`)) %>%
-  mutate(Q_m3s = Q_cfs * 0.02831) %>% #conver to cubic meters per second
-  filter(date <= "2011-09-30") %>%
-  ungroup() %>%
-  select(-agency_cd)
+
+## This is old code from stored .csv files. I don't think this is needd
+## anymore since we can just get it all from dataRetrieval?
+
+# Q_1983to2010 <- read_csv(here("data/LochO_DailyData_19830930-20231208.csv"), skip=29, col_names = TRUE) %>%
+#   slice(-1) %>% #Get rid of the first row, erroneous subheader
+#   mutate(date = mdy(datetime),
+#          Q_cfs = `250142_00060_00003`,
+#          Q_cfs = as.numeric(Q_cfs)) %>%
+#   select(-c(datetime, site_no, `250142_00060_00003_cd`, `250142_00060_00003`)) %>%
+#   mutate(Q_m3s = Q_cfs * 0.02831) %>% #conver to cubic meters per second
+#   filter(date <= "2011-09-30") %>%
+#   ungroup() %>%
+#   select(-agency_cd)
 
 
-Q_2010to2019 <- read_csv(here("data/LochO_DailyData_20101001-20190930.csv"), col_names = TRUE) %>%
-  select(Date, Discharge_CFS) %>%
-  rename(date=Date,
-         Q_cfs=Discharge_CFS) %>%
-  mutate(date = mdy(date),
-         Q_m3s = Q_cfs * 0.02831) #conver to cubic meters per second
+# Q_2010to2019 <- read_csv(here("data/LochO_DailyData_20101001-20190930.csv"), col_names = TRUE) %>%
+#   select(Date, Discharge_CFS) %>%
+#   rename(date=Date,
+#          Q_cfs=Discharge_CFS) %>%
+#   mutate(date = mdy(date),
+#          Q_m3s = Q_cfs * 0.02831) #conver to cubic meters per second
 
-#More recent data from dataRetrieal
+## More recent data from dataRetrieal
 
 # Get data for LV
 lv_no <- '401733105392404'
@@ -31,50 +35,103 @@ lv_no <- '401733105392404'
 params <- c('00060')
 
 # get daily values from NWIS
-Q_2019to2024 <- readNWISdv(siteNumbers = lv_no, parameterCd = params,
-                     startDate = '2019-10-01', endDate = '2024-09-30')
+LochQ <- readNWISdv(siteNumbers = lv_no, parameterCd = params,
+                     startDate = '1983-10-01', endDate = '2024-09-30')
 
 # rename columns using renameNWISColumns from package dataRetrieval
-Q_2019to2024 <- renameNWISColumns(Q_2019to2024)
+LochQ <- renameNWISColumns(LochQ)
 
-Q_2019to2024 <- Q_2019to2024 %>%
+LochQ <- LochQ %>%
   filter(Flow_cd=="A") %>%
   rename(Q_cfs = Flow,
          date= Date) %>%
   mutate(Q_m3s = Q_cfs * 0.02831) %>%
-  select(date, Q_cfs, Q_m3s)
-
-LochQ <- bind_rows(Q_1983to2010,
-                   Q_2010to2019,
-                   Q_2019to2024) %>%
-  arrange(date) %>%
+  select(date, Q_cfs, Q_m3s) %>%
   mutate(waterYear = calcWaterYear(date))
+
+# LochQ <- bind_rows(Q_1983to2010,
+#                    Q_2010to2019,
+#                    Q_2019to2024) %>%
+#   arrange(date) %>%
+#   mutate(waterYear = calcWaterYear(date))
+
+# Look at the gaps in 2019, 2020
+LochQ %>%
+  filter(waterYear %in% c("1985","1986")) %>%
+  ggplot(aes(x=date, y=Q_m3s))+
+  geom_point()+
+  facet_wrap(~waterYear, scales="free_x")
+
+# Need to look at how many NAs, and make a decision about gap filling for next step
+LochQ_tsbl <- as_tsibble(LochQ, key = waterYear) %>%
+  fill_gaps() %>% #adds ~400 missing days
+  mutate(Q_m3s = imputeTS::na_interpolation(Q_m3s, maxgap = 60))
+
+# Look at gaps in 2019, 2020 again
+LochQ_tsbl %>%
+  filter(waterYear %in% c("2019","2020")) %>%
+  ggplot(aes(x=date, y=Q_m3s))+
+  geom_point()+
+  facet_wrap(~waterYear, scales="free_x")
+
+# Anything weird in the rest of the data?
+LochQ_tsbl %>%
+  # filter(waterYear %in% c("2019","2020")) %>%
+  ggplot(aes(x=date, y=Q_m3s))+
+  geom_point()+
+  facet_wrap(~waterYear, scales="free_x")
+
 
 # calculate cumulative discharge for each year by first grouping by water year,
 # and then using the "cumsum" function. Add day of water year for plotting purposes.
 # These steps will build a new dataframe, with the existing information in yahara_dat
 # but with two additional columns.
-LochQ <- group_by(LochQ, waterYear) %>%
+LochQ <- group_by(LochQ_tsbl, waterYear) %>%
   mutate(cumulative_dis = cumsum(Q_m3s), 
          wy_doy = hydro.day(date)) %>%
-  filter(!waterYear == "1983")
+  filter(!waterYear %in% c("1983","2024"))
 
 
 #Defining seasons by the hydrograph?
-percentile_days <- LochQ %>%
+# percentile_days <- LochQ %>%
+#   group_by(waterYear) %>%
+#   arrange(date) %>%
+#   mutate(cumulative_dis = cumsum(Q_m3s),
+#          total_flow = sum(Q_m3s)) %>%
+#   group_by(waterYear) %>%
+#   summarise(
+#     day_20th = cur_data()$date[which(cumulative_dis >= 0.2 * total_flow)[1]],
+#     day_50th = cur_data()$date[which(cumulative_dis >= 0.5 * total_flow)[1]],
+#     day_80th = cur_data()$date[which(cumulative_dis >= 0.8 * total_flow)[1]]
+#   ) %>%
+#   mutate(day_20th_wydoy = hydro.day(day_20th),
+#          day_50th_wydoy = hydro.day(day_50th),
+#          day_80th_wydoy = hydro.day(day_80th))
+
+percentile_days <- data.frame(LochQ) %>%
+  arrange(waterYear, date) %>%
   group_by(waterYear) %>%
-  arrange(date) %>%
-  mutate(cumulative_dis = cumsum(Q_m3s),
-         total_flow = sum(Q_m3s)) %>%
-  group_by(waterYear) %>%
-  summarise(
-    day_20th = cur_data()$date[which(cumulative_dis >= 0.2 * total_flow)[1]],
-    day_50th = cur_data()$date[which(cumulative_dis >= 0.5 * total_flow)[1]],
-    day_80th = cur_data()$date[which(cumulative_dis >= 0.8 * total_flow)[1]]
+  mutate(
+    cumulative_dis = cumsum(Q_m3s),
+    total_flow = sum(Q_m3s),
+    frac_flow = cumulative_dis / total_flow
   ) %>%
-  mutate(day_20th_wydoy = hydro.day(day_20th),
-         day_50th_wydoy = hydro.day(day_50th),
-         day_80th_wydoy = hydro.day(day_80th))
+  # For each threshold, find the first date
+  summarise(
+    day_20th = date[which.min(abs(frac_flow - 0.2))],
+    day_50th = date[which.min(abs(frac_flow - 0.5))],
+    day_80th = date[which.min(abs(frac_flow - 0.8))]
+  ) %>%
+  mutate(
+    day_20th_wydoy = hydro.day(day_20th),
+    day_50th_wydoy = hydro.day(day_50th),
+    day_80th_wydoy = hydro.day(day_80th)
+  )
+
+percentile_days %>%
+  ggplot(aes(x=waterYear, y=day_50th_wydoy))+
+  geom_point()
+
 
 LochO_chem <-
   read.csv(

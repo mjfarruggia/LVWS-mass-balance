@@ -31,13 +31,8 @@ CQ_seasons_NO3 %>%
   geom_point()
 
 
-# fuck around with different metrics for snowmelt timing ------------------
+# Calculate snowmelt ONSET ------------------
 
-
-
-library(dplyr)
-library(zoo)
-library(lubridate)
 
 # Define function to detect snowmelt onset per year
 detect_snowmelt_onset <- function(df, window = 7, slope_threshold = 0.01) {
@@ -79,6 +74,18 @@ CQ_seasons_NO3 %>%
   labs(title = "Snowmelt Onset Detection", y = "Streamflow (m³/s)", x = "")
 
 # This seems to work pretty well!
+
+# Is there a trend? 
+percentile_days %>%
+  left_join(., snowmelt_onsets, by="waterYear") %>% 
+  ggplot(aes(x=waterYear, y=hydro.day(snowmelt_onset_date)))+
+  geom_point()
+
+percentile_days %>%
+  left_join(., snowmelt_onsets, by="waterYear") %>% 
+  ggplot(aes(x=waterYear, y=day_50th_wydoy-hydro.day(snowmelt_onset_date)))+
+  geom_point()
+
 # Add it to percentile_days
 head(snowmelt_onsets)
 
@@ -212,7 +219,62 @@ CQ_seasons %>%
   scale_colour_gradient(low = "yellow", high = "blue", na.value = NA)+
   labs(title="DOC")
 
-# Next steps
+
+# Mean, min, max concentrations by hydro season  --------------------------
+
+chem_seasons_concentration_summary <- CQ_seasons %>%
+  filter(waterYear >= 1991) %>%
+  drop_na(chem_name) %>%
+  group_by(waterYear, chem_name, hydro_season) %>%
+  summarize(min = min(chem_value, na.rm = TRUE),
+            mean = mean(chem_value, na.rm = TRUE),
+            median = median(chem_value, na.rm = TRUE),
+            max = max(chem_value, na.rm = TRUE)) 
+
+head(chem_seasons_concentration_summary)
+
+chem_seasons_concentration_summary %>%
+  pivot_longer(min:max) %>%
+  filter(!hydro_season=="NA") %>%
+  ggplot(aes(x=waterYear, y=value, color=name))+
+  geom_point()+
+  geom_smooth(method="lm",se=F)+
+  facet_wrap(chem_name~hydro_season, scales="free_y", ncol=4)
+
+
+chem_seasons_concentration_summary <- CQ_seasons %>%
+  filter(waterYear >= 1991) %>%
+  drop_na(chem_name) %>%
+  group_by(waterYear, chem_name, hydro_season) %>%
+  summarize(min = min(daily_flux_kg, na.rm = TRUE),
+            mean = mean(daily_flux_kg, na.rm = TRUE),
+            median = median(daily_flux_kg, na.rm = TRUE),
+            max = max(daily_flux_kg, na.rm = TRUE),
+            sum = sum(daily_flux_kg, na.rm = TRUE)) 
+
+head(chem_seasons_concentration_summary)
+
+chem_seasons_concentration_summary %>%
+  pivot_longer(min:sum) %>%
+  filter(!name=="sum") %>%
+  filter(!hydro_season=="NA") %>%
+  ggplot(aes(x=waterYear, y=value, color=name))+
+  geom_point()+
+  geom_smooth(method="lm",se=F)+
+  facet_wrap(chem_name~hydro_season, scales="free_y", ncol=4)
+
+chem_seasons_concentration_summary %>%
+  pivot_longer(min:sum) %>%
+  filter(name=="sum") %>%
+  filter(!hydro_season=="NA") %>%
+  ggplot(aes(x=waterYear, y=value, color=name))+
+  geom_point()+
+  geom_smooth(method="lm",se=F)+
+  facet_wrap(chem_name~hydro_season, scales="free_y", ncol=4)
+
+# NEXT STEPS: -------------------------------------------------------------
+
+
 # (1) Write a loop that extracts the slope (and intercept) of the C-Q relationships, plot over time for each water season
 # (2) are there relationships between the C-Q relationship and the cumulative flux? Maybe that is a "DUH" question??
 

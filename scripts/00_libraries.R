@@ -38,7 +38,7 @@ pacman::p_load("lubridate",
                "huxtable",
                "officer",
                "flextable",
-               # "colorblindr",
+               "zoo",
                "Hmisc",
                "readxl")
 

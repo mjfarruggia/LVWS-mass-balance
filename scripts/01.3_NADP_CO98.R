@@ -103,7 +103,36 @@ annual_dep <- NADP %>%
          deposition_kg_per_ha = deposition_kg/660) %>%
   as.data.frame() %>%
   group_by(waterYear, deposition_name) %>%
-  summarize(deposition_kg_per_ha_impute = sum(deposition_kg_per_ha, na.rm=TRUE))
+  summarize(deposition_kg_per_ha_impute = sum(deposition_kg_per_ha, na.rm=TRUE),
+            annual_ppt_mm = sum(ppt_mm_bret))
+
+# What's the relationship between annual dep and ppt?
+# annual_dep<- annual_dep %>%
+#   drop_na() 
+# 
+# annual_dep %>%
+#   filter(waterYear>1983) %>%
+#   ggplot(aes(x=deposition_kg_per_ha_impute, y=annual_ppt_mm, color=deposition_name))+
+#   geom_point(alpha=0.5)+
+#   geom_smooth(method="lm",se=F)+
+#   facet_wrap(~deposition_name, scales="free") +
+#   theme(legend.position = "none")
+# 
+# annual_dep_corr <- annual_dep %>%
+#   pivot_wider(names_from = deposition_name, 
+#               values_from = deposition_kg_per_ha_impute) %>%
+#   filter(waterYear>1983) %>%
+#   ungroup() %>%
+#   select(-waterYear)
+# # Compute a correlation matrix
+# corr <- round(cor(annual_dep_corr), 1) # rounded to one decimal point
+# # Compute a matrix of correlation p-values
+# library(ggcorrplot)
+# ggcorrplot(corr,
+#            hc.order = TRUE,
+#            type = "lower",
+#            lab = TRUE)
+
 
 #Monthly dep (June-Aug)
 monthly_dep <- NADP %>%

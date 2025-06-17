@@ -17,7 +17,7 @@ CQ_seasons <- outlet_daily_flux %>%
   mutate(wy_doy = hydro.day(date))
 
 # Pick DOC for now
-CQ_seasons_NO3 <- CQ_seasons %>%
+CQ_seasons_DOC <- CQ_seasons %>%
   filter(chem_name=="DOC") %>%
   group_by(waterYear) %>%
   # filter(waterYear=="2010") %>%
@@ -26,9 +26,18 @@ CQ_seasons_NO3 <- CQ_seasons %>%
                                   date >= day_20th & date < day_50th ~ "rising limb",
                                   date >= day_50th & date <= day_80th ~ "falling limb"))
 
-CQ_seasons_NO3 %>%
+CQ_seasons_DOC %>%
+  group_by(waterYear, hydro_season) %>%
+  summarize(chem_value = median(chem_value, na.rm=TRUE)) %>%
+  ggplot(aes(x=waterYear, y=chem_value, color=hydro_season))+
+  geom_point()+
+  geom_smooth(method="lm")
+
+CQ_seasons_DOC %>%
   ggplot(aes(x=date, y=chem_value, color=hydro_season))+
-  geom_point()
+  geom_point()+
+  geom_smooth(method="lm")+
+  facet_wrap(~hydro_season, scales="free")
 
 
 # Calculate snowmelt ONSET ------------------
@@ -72,6 +81,58 @@ CQ_seasons_NO3 %>%
              color = "blue", linetype = "dashed") +
   facet_wrap(~waterYear, scales = "free_x") +
   labs(title = "Snowmelt Onset Detection", y = "Streamflow (m³/s)", x = "")
+
+
+CQ_seasons_NO3 %>%
+  # filter(waterYear %in% c(1995, 2000, 2005)) %>%
+  ggplot(aes(x = date, y = Q_m3s)) +
+  geom_line() +
+  geom_vline(data = snowmelt_onsets,
+             aes(xintercept = snowmelt_onset_date),
+             color = "blue", linetype = "dashed") +
+  geom_vline(xintercept=percentile_days$day_20th, color="purple")+
+  geom_vline(xintercept=percentile_days$day_50th, color="green")+
+  geom_vline(xintercept=percentile_days$day_80th, color="red")+
+  facet_wrap(~waterYear, scales = "free_x") +
+  labs(title = "Snowmelt Onset Detection", y = "Streamflow (m³/s)", x = "")
+
+# One graph showing ridgelines for each parameter for distributions
+
+snowmelt_phenology <-left_join(percentile_days, snowmelt_onsets) %>%
+  mutate(snowmelt_onset_doy = yday(snowmelt_onset_date),
+         day_20th_doy = yday(day_20th),
+         day_50th_doy = yday(day_50th),
+         day_80th_doy = yday(day_80th)) %>%
+  select(waterYear, day_20th_doy, day_50th_doy, day_80th_doy, snowmelt_onset_doy) %>%
+  pivot_longer(-waterYear) %>%
+  mutate(name = factor(name,
+                       levels = c("snowmelt_onset_doy",
+                                  "day_20th_doy",
+                                  "day_50th_doy",
+                                  "day_80th_doy")))
+
+# Distributions  
+ggplot(snowmelt_phenology, aes(x = value, y = name)) + ggridges::geom_density_ridges()
+
+# Trends
+snowmelt_phenology %>%
+  mutate(value = as.Date(value - 1, origin = "2000-01-01")) %>%
+  ggplot(aes(x=waterYear, y=value, color=name))+
+  geom_point()+
+  geom_line()+
+  geom_smooth(method="gam")+
+  scale_y_date(
+    date_labels = "%b %d",           # Show month and day
+    date_breaks = "2 weeks"          # Adjust as needed
+  ) +
+  theme(
+    legend.position = c(0.05, 0.95),       # (x, y) in [0, 1] relative to plot area
+    legend.justification = c("left", "top"), # Anchor legend to top-left
+    legend.background = element_rect(fill = alpha("white", 0.8))  # Optional: add background for readability
+  )
+
+
+
 
 # This seems to work pretty well!
 

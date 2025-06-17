@@ -119,6 +119,8 @@ ggplot(N_dep_annual, aes(y = deposition_kg_per_ha_impute, x = waterYear)) +
   theme_few(base_size=36)
 
 
+## Relationship between annual dep and ppt?
+head(annual_dep)
 
 
 ```

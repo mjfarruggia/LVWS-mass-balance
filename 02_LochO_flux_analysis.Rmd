@@ -32,31 +32,31 @@ knitr::opts_chunk$set(fig.width=unit(12,"cm"), fig.height=unit(8,"cm"))
 ### Missing data:
 Missing data are sprinkled throughout, but basically a non-issue after 1991. I interpolated between weeks with missing data where necessary but this is extremely rare after 1991. We do not have data past 2023 in the database yet.
 ```{r, echo=FALSE, include=FALSE}
-vis_miss(outlet_raw_weekly%>%
-           select(waterYear, NO3_calc)) 
+# vis_miss(outlet_raw_weekly%>%
+#            select(waterYear, no3_mgl)) 
 
 ```
 
 I linearly interpolated missing Loch outlet chemistry values between sampling trips up with up to 30 days of missing data. Beyond that, I did not interpolate and those are in the dataset as NAs.
 
 ```{r, echo=FALSE, include=FALSE}
-outlet_weekly_flux %>%
-  group_by(chem_name, waterYear) %>%
-  summarize(n=n(),
-         n_NAs=sum(is.na(chem_value)),
-         perc_missing_days=(n_NAs/365)*100) %>%# calculate percentage of missing observations
-  ggplot(aes(x=waterYear, y=perc_missing_days, color=chem_name))+
-  geom_point()+
-  facet_wrap(~chem_name)+
-  labs(title="% missing data annually")
+# outlet_weekly_flux %>%
+#   group_by(chem_name, waterYear) %>%
+#   summarize(n=n(),
+#          n_NAs=sum(is.na(chem_value)),
+#          perc_missing_days=(n_NAs/365)*100) %>%# calculate percentage of missing observations
+#   ggplot(aes(x=waterYear, y=perc_missing_days, color=chem_name))+
+#   geom_point()+
+#   facet_wrap(~chem_name)+
+#   labs(title="% missing data annually")
 
 ```
 
 There's still some 2019 NO3 data missing that I will ask MJ's help to track down.
 
 ```{r, echo=FALSE, include=FALSE}
-outlet_weekly_flux %>%
-  mutate(month = month(DATE)) %>%
+outlet_daily_flux %>%
+  mutate(month = month(date)) %>%
   filter(month %in% c(6,7,8)) %>%
   group_by(chem_name, waterYear) %>%
   summarize(n=n(),
@@ -296,4 +296,168 @@ summer_flux %>%
   scale_fill_manual(values=chemCols,
                     name="Observed")
 ggsave("figures/loch_export_trends_summer.png", dpi=600, width=8, height=6, units="in")
+```
+
+# Look at hydrologic season definitions
+```{r}
+
+CQ_seasons <- outlet_daily_flux %>%
+  left_join(., percentile_days, by="waterYear") %>%
+  mutate(wy_doy = hydro.day(date)) %>%
+  mutate(hydro_season = case_when(date > day_80th  ~ "fall baseflow",
+                                  date < day_20th ~ "winter baseflow",
+                                  date >= day_20th & date < day_50th ~ "rising limb",
+                                  date >= day_50th & date <= day_80th ~ "falling limb")) 
+head(CQ_seasons)
+
+# Visualize missingness first, which years/solutes are sus?
+CQ_seasons %>%
+  group_by(chem_name, waterYear, hydro_season) %>%
+  summarize(n=n(),
+         n_NAs=sum(is.na(chem_value)),
+         perc_missing_days=(n_NAs/365)*100) %>%# calculate percentage of missing observations
+  ggplot(aes(x=waterYear, y=perc_missing_days, color=chem_name))+
+  geom_point()+
+  facet_wrap(hydro_season~chem_name)+
+  labs(title="% missing data annually")
+
+hydro_season_flux <- CQ_seasons %>%
+    filter(!chem_name %in% c("temp_c","tdn_mgl","po4_mgl")) %>%
+  group_by(chem_name, waterYear, hydro_season) %>%
+  mutate(n=n(),
+         n_NAs=sum(is.na(chem_value)),
+         perc_missing_days=(n_NAs/365)*100) %>%
+  filter(!perc_missing_days > 20) %>% #drop year*chem*hydroseason combos with a lot of NAs
+  select(-c(n, n_NAs, perc_missing_days)) %>%
+  group_by(waterYear, chem_name, hydro_season) %>%
+  summarise(
+    # Calculate annual flux over that time period
+    # annual_flux_kg = sum(daily_flux_kg, na.rm = TRUE)) %>%
+    annual_flux_kg = sum(daily_flux_kg, na.rm = TRUE), .groups = "drop") %>%
+  mutate(
+    # Calculate annual flux per hectare
+    annual_flux_kg_per_ha = annual_flux_kg / 660)
+
+
+
+##hydro seasons
+hydroseason_export_trends_nested <- hydro_season_flux %>%
+  rename(value=annual_flux_kg_per_ha) %>%
+  # filter(waterYear >= 1991 & waterYear <= 2022) %>%
+  group_by(hydro_season, chem_name) %>%
+  nest() %>%
+  mutate(
+    sens = map(data, map_sens),
+    sens_sum = map(sens, broom::glance),
+    slope = map(sens, sens_slope),
+    zyp_mod = map(data, map_zyp),
+    intercept = map(zyp_mod, sens_intercept)
+  )
+
+
+## Un-nest 
+hydroseason_export_trends_unnested = unnest(hydroseason_export_trends_nested, c(sens_sum, slope, hydro_season, chem_name)) %>%
+  mutate(
+    trend = case_when(
+      p.value <= 0.05 & slope >= 0 ~ 'increasing',
+      p.value <= 0.05 & slope <= 0 ~ 'decreasing',
+      p.value > 0.05 ~ 'no trend'
+    ),
+    trend = factor(trend,
+                       levels = c('no trend',
+                                  'increasing',
+                                  'decreasing'))
+  )
+
+#Extract all covariates for modeling...
+hydroseason_export_trends <- hydroseason_export_trends_unnested %>%
+  select(hydro_season, chem_name, slope, p.value, trend, intercept) %>%
+  unnest(c(slope)) %>%
+  mutate(intercept = as.numeric(intercept))
+```
+
+## Plot hydro season fluxes
+```{r}
+
+hydro_season_flux %>%
+  mutate(
+    hydro_season = factor(hydro_season,
+                          levels = c("rising limb",
+                                     "falling limb",
+                                     "fall baseflow",
+                                     "winter baseflow")),
+    chem_name = case_match(
+      chem_name,
+      "sio2_mgl" ~ "silica",
+      .default = chem_name
+    )
+  ) %>%
+  ggplot(aes(x = waterYear, y = annual_flux_kg_per_ha)) +
+  
+  geom_point(aes(fill = hydro_season), 
+             size = 2, shape = 21, color = "black", alpha = 0.7) +
+  
+  geom_abline(data = hydroseason_export_trends %>%
+                filter(!trend == "no trend") %>%
+                mutate(chem_name = case_match(
+                  chem_name,
+                  "sio2_mgl" ~ "silica",
+                  .default = chem_name
+                )),
+              aes(intercept = intercept, slope = slope, color = hydro_season),
+              linewidth = 1.5,
+              show.legend = FALSE) +
+  
+  facet_wrap(~chem_name, scales = "free_y") +
+  theme_few(base_size = 12) +
+  theme(legend.position = "bottom") +  # 👈 move legend
+  
+  labs(y = "Flux (kg/ha/year)",
+       x = "Year") +
+  
+  scale_fill_manual(values = hydroCols, name = "Hydrologic season") +
+  scale_color_manual(values = hydroCols) +
+  
+  guides(fill = guide_legend(nrow = 2, byrow = TRUE, override.aes = list(alpha = 1)))  
+
+
+ggsave("figures/loch_export_trends_hydroseason.png", dpi=600, width=8, height=6, units="in")
+# Change in NH4 as a proportion of DIN?
+hydro_season_flux %>%
+  ungroup() %>%
+  select(waterYear, hydro_season, chem_name, annual_flux_kg_per_ha) %>%
+  filter(chem_name %in% c("NH4-N","NO3-N")) %>%
+  pivot_wider(names_from=chem_name,
+              values_from=annual_flux_kg_per_ha) %>%
+  mutate(DIN = `NH4-N`+`NO3-N`,
+         NH4_DIN = `NH4-N`/DIN,
+         NO3_DIN = `NO3-N`/DIN) %>%
+  ggplot(aes(x=waterYear, y=NO3_DIN, color=hydro_season, fill=hydro_season, group=hydro_season))+
+  geom_point(size=2, shape=21, color="black")+ 
+  theme_few(base_size = 12)+
+  geom_smooth(method="lm")+
+  scale_color_manual(values=hydroCols,
+                     "Fit")+
+  scale_fill_manual(values=hydroCols,
+                    name="Observed")
+
+hydro_season_flux %>%
+  ungroup() %>%
+  select(waterYear, hydro_season, chem_name, annual_flux_kg_per_ha) %>%
+  filter(chem_name %in% c("NH4-N","NO3-N")) %>%
+  pivot_wider(names_from=chem_name,
+              values_from=annual_flux_kg_per_ha) %>%
+  mutate(DIN = `NH4-N`+`NO3-N`,
+         NH4_DIN = `NH4-N`/DIN,
+         NO3_DIN = `NO3-N`/DIN) %>%
+  ggplot(aes(x=waterYear, y=NH4_DIN, color=hydro_season, fill=hydro_season, group=hydro_season))+
+  geom_point(size=2, shape=21, color="black")+ 
+  theme_few(base_size = 12)+
+  geom_smooth(method="gam")+
+  scale_color_manual(values=hydroCols,
+                     "Legend")+
+  scale_fill_manual(values=hydroCols,
+                    name="Legend")
+
+
 ```

@@ -273,22 +273,41 @@ There is only a trend line on the plot if p < 0.05.
 ```{r, echo=FALSE, warning=FALSE}
 
 annual_dep %>%
-  rename(value=deposition_kg_per_ha_impute) %>%
+  rename(value = deposition_kg_per_ha_impute) %>%
   filter(waterYear > 1984 & waterYear < 2023) %>%
-  filter(!waterYear==1986) %>%
-  ggplot(aes(x=waterYear, y=value, fill=deposition_name, group=deposition_name))+
-  geom_point(size=2, shape=21)+ 
-  facet_wrap(~deposition_name, scales="free_y")+
-  theme_few(base_size = 12)+
-  geom_abline(data = annual_dep_trends %>% filter(!trend=="no trend"), aes(intercept = intercept, slope = slope, color=deposition_name)) +
-  labs(y="Deposition (kg/ha/year)",
-       x="Year",
-       title="Annual") +
-  scale_color_manual(values=chemCols,
-                     "Fit")+
-  scale_fill_manual(values=chemCols,
-                    name="Observed")
-ggsave("figures/deposition_trends_annual.png", dpi=600, width=8, height=6, units="in")
+  filter(!waterYear == 1986) %>%
+  ggplot(aes(
+    x = waterYear,
+    y = value,
+    fill = deposition_name,
+    group = deposition_name
+  )) +
+  geom_point(size = 2, shape = 21) +
+  facet_wrap( ~ deposition_name, scales = "free_y", ncol=2) +
+  theme_few(base_size = 12) +
+  geom_abline(
+    data = annual_dep_trends %>% filter(!trend == "no trend"),
+    aes(
+      intercept = intercept,
+      slope = slope,
+      color = deposition_name
+    )
+  ) +
+  labs(y = "Annual deposition (kg/ha/year)",
+       x = "Year") +
+  # geom_smooth(method = "gam") +
+  scale_color_manual(values = chemCols,
+                     "Fit") +
+  scale_fill_manual(values = chemCols,
+                    name = "Observed") +
+  theme(legend.position = "none")
+ggsave(
+  "figures/deposition_trends_annual.png",
+  dpi = 600,
+  width = 4,
+  height = 6,
+  units = "in"
+)
 ```
 
 ### Monthly deposition 1984-2022

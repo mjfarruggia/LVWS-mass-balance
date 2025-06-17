@@ -40,7 +40,12 @@ pacman::p_load("lubridate",
                "flextable",
                "zoo",
                "Hmisc",
-               "readxl")
+               "readxl",
+               "ggh4x", #add minor breaks to x-axis
+               #GAMS stuff
+               "mgcv",
+               "magrittr",
+               "gratia")
 
 #Use renv for version control.  Beginner guide here:
 # https://rstudio.github.io/renv/articles/renv.html
@@ -55,7 +60,7 @@ summarize <- dplyr::summarize
 
 
 monthCols <- c(
-  'July' = '#a8a632',
+  'July' = '#eed440',
   'June' = '#3258a8',
   'August' = '#a83632')
 
@@ -68,3 +73,7 @@ chemCols <- c(
   "Inorganic N" ="#1978E4"
 )
 
+hydroCols <- c("fall baseflow" = "#bb5b48",
+               "winter baseflow" = "#6493c8",
+               "falling limb" = "#eed440",
+               "rising limb" = "#aad440")

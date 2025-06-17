@@ -192,9 +192,11 @@ LochQ %>%
   facet_wrap(.~waterYear, scales="free_x")
 
 
+
+
 # Chemistry! --------------------------------------------------------------
 
-Loch_chem <- read.csv("data/LV_chemistry_4Jun2025_MJF.csv") %>%
+Loch_chem <- read.csv("data/LV_chemistry_12Jun2025_MJF.csv") %>%
   filter(site == "loch" & sampleType == "norm") %>%
   group_by(site, sampleLocation, date, parameter) %>%
   #For now take mean of everything for multiple day entries, but ask Jill about this
@@ -274,10 +276,10 @@ LochO_chem %>%
 
 ## WEEKLY flux esimates instead
 # 
-# outlet_raw_weekly <- LochO_chem %>%
-#   left_join(., LochQ %>% select(date, Q_m3s), by=c("date","waterYear")) %>%
-#   left_join(., percentile_days %>% select(waterYear, day_20th_wydoy:day_80th_wydoy), by="waterYear") %>%
-#   mutate(wy_doy = hydro.day(date))
+outlet_raw_weekly <- LochO_chem %>%
+  left_join(., LochQ %>% select(date, Q_m3s), by=c("date","waterYear")) %>%
+  left_join(., percentile_days %>% select(waterYear, day_20th_wydoy:day_80th_wydoy), by="waterYear") %>%
+  mutate(wy_doy = hydro.day(date))
 
 
 # THIS IS THE WAY, CLEAN ME
@@ -290,8 +292,10 @@ LochO_chem_daily <- LochO_chem %>%
   filter(waterYear >= 1984 & waterYear <= 2023) %>%
   pivot_wider(names_from = parameter, values_from = value) %>%
   mutate(cations_mgl = ca_mgl + mg_mgl + na_mgl + k_mgl) %>% 
-  select(date, waterYear, so4_mgl, cations_mgl, nh4_mgl, no3_mgl, sio2_mgl, doc_mgl) %>%
-  pivot_longer(c(so4_mgl, cations_mgl, nh4_mgl, no3_mgl, sio2_mgl,doc_mgl),
+  select(date, waterYear, so4_mgl, cations_mgl, nh4_mgl, no3_mgl, sio2_mgl, doc_mgl, temp_c,
+         po4_mgl,tdn_mgl) %>%
+  pivot_longer(c(so4_mgl, cations_mgl, nh4_mgl, no3_mgl, sio2_mgl,doc_mgl,temp_c,
+                 po4_mgl,tdn_mgl),
                names_to = "chem_name",
                values_to = "chem_value") %>% #units for all are mg/L
   # group_by(chem_name, waterYear, weekofyear) %>% 
@@ -345,7 +349,7 @@ annual_flux <- outlet_daily_flux %>%
   mutate(
     # Calculate annual flux per hectare
     annual_flux_kg_per_ha = annual_flux_kg / 660)
-    
+
 summer_flux <- outlet_daily_flux %>%
   mutate(
     month = month(date)
@@ -441,3 +445,10 @@ annual_RP <- bind_RP %>%
             RP = Q_m3/ppt_m3) %>%
   filter(waterYear >= 1984 & waterYear <= 2023)
 
+ggplot(annual_RP %>%  filter(waterYear >= 1984 & waterYear < 2023), 
+       aes(x = waterYear, 
+           y = RP)) + 
+  geom_bar(stat="identity")+
+  geom_hline(yintercept = 1, linetype="dashed")+
+  geom_hline(yintercept = annual_RP %>% summarize(RP=mean(RP, na.mr=TRUE)) %>% pull(RP))+
+  labs(title="RP over time")

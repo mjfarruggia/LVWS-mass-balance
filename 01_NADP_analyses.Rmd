@@ -273,6 +273,12 @@ There is only a trend line on the plot if p < 0.05.
 ```{r, echo=FALSE, warning=FALSE}
 
 annual_dep %>%
+  mutate(deposition_name = factor(deposition_name,
+                                  levels = c("cations",
+                                             "SO4-S",
+                                             "NO3-N",
+                                             "NH4-N",
+                                             "Inorganic N"))) %>%
   rename(value = deposition_kg_per_ha_impute) %>%
   filter(waterYear > 1984 & waterYear < 2023) %>%
   filter(!waterYear == 1986) %>%
@@ -283,29 +289,35 @@ annual_dep %>%
     group = deposition_name
   )) +
   geom_point(size = 2, shape = 21) +
-  facet_wrap( ~ deposition_name, scales = "free_y", ncol=2) +
+  facet_wrap( ~ deposition_name, scales = "free_y", ncol=5) +
   theme_few(base_size = 12) +
   geom_abline(
-    data = annual_dep_trends %>% filter(!trend == "no trend"),
+    data = annual_dep_trends %>% filter(!trend == "no trend") %>% mutate(deposition_name = factor(deposition_name,
+                                  levels = c("cations",
+                                             "SO4-S",
+                                             "NO3-N",
+                                             "NH4-N",
+                                             "Inorganic N"))),
     aes(
       intercept = intercept,
       slope = slope,
       color = deposition_name
-    )
+    ),
+    linewidth=1, linetype="dashed"
   ) +
-  labs(y = "Annual deposition (kg/ha/year)",
+  labs(y = "Annual deposition (kg/ha)",
        x = "Year") +
-  # geom_smooth(method = "gam") +
+  geom_smooth(aes(color=deposition_name), method = "gam") +
   scale_color_manual(values = chemCols,
                      "Fit") +
   scale_fill_manual(values = chemCols,
                     name = "Observed") +
   theme(legend.position = "none")
 ggsave(
-  "figures/deposition_trends_annual.png",
+  "figures/deposition_trends_annual.pdf",
   dpi = 600,
-  width = 4,
-  height = 6,
+  width = 13,
+  height = 2.5,
   units = "in"
 )
 ```
@@ -359,4 +371,11 @@ summer_dep %>%
   scale_fill_manual(values=chemCols,
                     name="Observed")
 ggsave("figures/deposition_trends_summer.png", dpi=600, width=8, height=6, units="in")
+```
+
+
+### Patterns over time (raw) (1984-2022)
+```{r}
+
+# Eventually make a bunch of graphs showing monthly deposition rates
 ```

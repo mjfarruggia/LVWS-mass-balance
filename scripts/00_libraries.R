@@ -77,3 +77,9 @@ hydroCols <- c("fall baseflow" = "#bb5b48",
                "winter baseflow" = "#6493c8",
                "falling limb" = "#eed440",
                "rising limb" = "#aad440")
+
+hydroCols2 <- c("Q 80th" = "#bb5b48",
+               "snowmelt onset" = "#6493c8",
+               "Q 50th (COM)" = "#eed440",
+               "Q 20th" = "#aad440")
+

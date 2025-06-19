@@ -386,6 +386,13 @@ hydro_season_flux %>%
                                      "falling limb",
                                      "fall baseflow",
                                      "winter baseflow")),
+        chem_name = factor(chem_name,
+                          levels = c("cations",
+                                     "SO4-S",
+                                     "NO3-N",
+                                     "NH4-N",
+                                     "DOC",
+                                     "sio2_mgl")),
     chem_name = case_match(
       chem_name,
       "sio2_mgl" ~ "silica",
@@ -410,9 +417,9 @@ hydro_season_flux %>%
   
   facet_wrap(~chem_name, scales = "free_y") +
   theme_few(base_size = 12) +
-  theme(legend.position = "bottom") +  # 👈 move legend
+  theme(legend.position = "bottom") + 
   
-  labs(y = "Flux (kg/ha/year)",
+  labs(y = "Watershed outlet flux (kg/ha)",
        x = "Year") +
   
   scale_fill_manual(values = hydroCols, name = "Hydrologic season") +
@@ -422,6 +429,57 @@ hydro_season_flux %>%
 
 
 ggsave("figures/loch_export_trends_hydroseason.png", dpi=600, width=8, height=6, units="in")
+
+
+
+
+hydro_season_flux %>%
+  mutate(
+    hydro_season = factor(hydro_season,
+                          levels = c("rising limb",
+                                     "falling limb",
+                                     "fall baseflow",
+                                     "winter baseflow")),
+    chem_name = case_match(
+      chem_name,
+      "sio2_mgl" ~ "silica",
+      .default = chem_name
+    )
+  ) %>%
+  ggplot(aes(x = waterYear, y = annual_flux_kg_per_ha)) +
+  
+  geom_point(aes(fill = chem_name), 
+             size = 2, shape = 21, color = "black", alpha = 0.7) +
+  
+  geom_abline(data = hydroseason_export_trends %>%
+                filter(!trend == "no trend") %>%
+                mutate(chem_name = case_match(
+                  chem_name,
+                  "sio2_mgl" ~ "silica",
+                  .default = chem_name
+                )),
+              aes(intercept = intercept, slope = slope, color = chem_name),
+              linewidth = 1.5,
+              show.legend = FALSE) +
+  
+  facet_grid(chem_name~hydro_season, scales = "free_y") +
+  theme_few(base_size = 12) +
+  theme(legend.position = "bottom") + 
+  
+  labs(y = "Watershed outlet flux (kg/ha)",
+       x = "Year") +
+  
+  # scale_fill_manual(values = hydroCols, name = "Hydrologic season") +
+  # scale_color_manual(values = hydroCols) +
+  
+  guides(fill = guide_legend(nrow = 2, byrow = TRUE, override.aes = list(alpha = 1)))  
+
+
+ggsave("figures/loch_export_trends_hydroseason.png", dpi=600, width=8, height=6, units="in")
+
+
+
+
 # Change in NH4 as a proportion of DIN?
 hydro_season_flux %>%
   ungroup() %>%

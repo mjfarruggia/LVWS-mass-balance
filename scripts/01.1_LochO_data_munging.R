@@ -171,6 +171,11 @@ lm2<- lm(day_80th_wydoy-day_20th_wydoy~waterYear, data=percentile_days)
 summary(lm2) #modest, 2.4 days per decade shorter duration of snowmelt start to baseflow
 
 
+## Plot all for GRC poster
+percentile_days %>%
+  pivot_longer(day_20th_wydoy:day_80th_wydoy) %>%
+  ggplot(aes(x=waterYear, y=value, color=name))+
+  geom_point()
 
 # Plot dates over raw. Look reasonable?
 # Cumulative flow
@@ -451,4 +456,6 @@ ggplot(annual_RP %>%  filter(waterYear >= 1984 & waterYear < 2023),
   geom_bar(stat="identity")+
   geom_hline(yintercept = 1, linetype="dashed")+
   geom_hline(yintercept = annual_RP %>% summarize(RP=mean(RP, na.mr=TRUE)) %>% pull(RP))+
-  labs(title="RP over time")
+  labs(title="Run-off ratio",
+       y="R:P",
+       x="Year")

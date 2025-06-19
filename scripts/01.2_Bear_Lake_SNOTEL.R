@@ -60,17 +60,53 @@ SWE_stats <- SWE_stats %>%
          snow_melt_duration = first_snow_melt_wydoy - max_swe_wydoy)
 
 # Plot date of max SWE of time, last snow melt, and the distance between the two dates
-SWE_stats %>%
-  select(year, max_swe_wydoy, max_swe) %>%
-  pivot_longer(-year) %>%
-  mutate(name = recode(name, max_swe_wydoy = "Date of max. SWE", max_swe = "Max SWE (cm)")) %>%
-  ggplot(aes(x=year, y=value, fill=name))+
-  geom_point(shape=21, size=2)+
-  # geom_smooth(method="lm")+
-  facet_wrap(.~name, scales="free_y", nrow=2)+
-  scale_fill_manual(values=c("#E69F00", "#56B4E9"))+
-  theme_few(base_size=16)+
-  theme(legend.position="none")+
-  labs(x="Year", y = "Value")
-ggsave("figures/bear_lake_SWE.png", dpi=600, units="in", height=5, width=3)
 
+maxSWEdate <- SWE_stats %>%
+  select(year, max_swe_date) %>%
+  mutate(max_swe_doy = yday(max_swe_date)) %>%
+  mutate(max_swe_date = as.Date(max_swe_doy - 1, origin = "2000-01-01")) %>%
+  ggplot(aes(x=year, y=max_swe_date))+
+  geom_point(shape=21, size=2, fill="#E69F00")+
+  theme_few(base_size=12)+
+  theme(legend.position="none")+
+  labs(x="Year", y = "Date of\nmax. SWE") +
+  theme(axis.title.x = element_blank(),
+        axis.text.x = element_blank(),
+        axis.ticks.x = element_blank(),
+        plot.margin=unit(c(0,0,0,0), "lines"))
+
+maxSWE <- SWE_stats %>%
+  select(year, max_swe) %>%
+  ggplot(aes(x=year, y=max_swe))+
+  geom_point(shape=21, size=2, fill="#56B4E9")+
+  theme_few(base_size=12)+
+  theme(legend.position="none")+
+  labs(x="Year", y = "Maximum\nSWE (cm)")+
+  theme(plot.margin=unit(c(0,0,0,0), "lines"))
+
+maxSWEdate / maxSWE 
+
+ggsave("figures/bear_lake_SWE.png", dpi=600, units="in", height=2.6, width=3.2)
+
+# April 1 SWE? 
+snow_data %>%
+  mutate(doy=yday(date)) %>%
+  filter(doy=="91") %>%
+  ggplot(aes(x=waterYear, y=snow_water_equivalent))+
+  geom_point()+
+  geom_smooth()+
+  labs(y="April 1 SWE (cm)")
+
+
+# More May snow?
+snow_data %>%
+  mutate(month=month(date)) %>%
+  filter(month=="5") %>%
+  group_by(waterYear, month) %>%
+  summarize(total_new_snow = sum(precipitation)) %>%
+  ggplot(aes(x=waterYear, y=total_new_snow))+
+  geom_point()+
+  labs(y="Total new snow, May (cm)",
+       title="SNOTEL at Bear Lake")
+  # facet_wrap(~month)+
+  # geom_smooth(method="gam")

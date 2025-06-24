@@ -45,7 +45,8 @@ pacman::p_load("lubridate",
                #GAMS stuff
                "mgcv",
                "magrittr",
-               "gratia")
+               "gratia",
+               "imputeTS")
 
 #Use renv for version control.  Beginner guide here:
 # https://rstudio.github.io/renv/articles/renv.html

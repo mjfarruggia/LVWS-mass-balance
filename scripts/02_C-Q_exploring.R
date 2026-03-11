@@ -1,5 +1,8 @@
 source("scripts/01.1_LochO_data_munging.R")
 
+### IAO -- next time, troubleshoot why 1999 doesn't have a snowmelt onset. Missing data??
+
+
 head(outlet_daily_flux)
 
 outlet_daily_flux %>%

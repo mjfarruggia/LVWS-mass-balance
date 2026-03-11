@@ -1,5 +1,5 @@
-source("scripts/00_functions.R")
-source("scripts/00_libraries.R")
+source("functions/00_functions.R")
+source("functions/00_libraries.R")
 #Pull in the disparate .csv files with loch outlet Q data
 #(temp, cond, and other exist at different timescales but we'll just pull Q for now)
 
@@ -60,7 +60,7 @@ LochQ <- LochQ %>%
 
 # Look at the gaps in 2019, 2020
 LochQ %>%
-  filter(waterYear %in% c("1985","1986")) %>%
+  filter(waterYear %in% c("2019","2020")) %>%
   ggplot(aes(x=date, y=Q_m3s))+
   geom_point()+
   facet_wrap(~waterYear, scales="free_x")
@@ -83,12 +83,11 @@ LochQ_tsbl %>%
   ggplot(aes(x=date, y=Q_m3s))+
   geom_point()+
   facet_wrap(~waterYear, scales="free_x")
-
+# Nope, looks good
 
 # calculate cumulative discharge for each year by first grouping by water year,
 # and then using the "cumsum" function. Add day of water year for plotting purposes.
-# These steps will build a new dataframe, with the existing information in yahara_dat
-# but with two additional columns.
+
 LochQ <- group_by(LochQ_tsbl, waterYear) %>%
   mutate(cumulative_dis = cumsum(Q_m3s), 
          wy_doy = hydro.day(date)) %>%
@@ -111,7 +110,7 @@ LochQ <- group_by(LochQ_tsbl, waterYear) %>%
 #          day_50th_wydoy = hydro.day(day_50th),
 #          day_80th_wydoy = hydro.day(day_80th))
 
-percentile_days <- data.frame(LochQ) %>%
+percentile_days <- data.frame(LochQ_tsbl) %>%
   arrange(waterYear, date) %>%
   group_by(waterYear) %>%
   mutate(
@@ -179,7 +178,7 @@ percentile_days %>%
 
 # Plot dates over raw. Look reasonable?
 # Cumulative flow
-LochQ %>%
+LochQ_tsbl %>%
   ggplot(aes(x=date, y=cumulative_dis))+
   geom_point()+
   geom_vline(xintercept=percentile_days$day_20th, color="blue")+
@@ -188,7 +187,7 @@ LochQ %>%
   facet_wrap(.~waterYear, scales="free_x")
 
 # Raw discharge
-LochQ %>%
+LochQ_tsbl %>%
   ggplot(aes(x=date, y=Q_m3s))+
   geom_line()+
   geom_vline(xintercept=percentile_days$day_20th, color="blue")+
@@ -202,8 +201,9 @@ LochQ %>%
 
 
 # Chemistry! --------------------------------------------------------------
+source("functions/00_load_LVWS_EDI.R")
 
-Loch_chem <- read.csv("data/LV_chemistry_12Jun2025_MJF.csv") %>%
+Loch_chem <- Loch_chem %>%
   filter(site == "loch" & sampleType == "norm") %>%
   group_by(site, sampleLocation, date, parameter) %>%
   #For now take mean of everything for multiple day entries, but ask Jill about this

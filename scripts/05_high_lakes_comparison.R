@@ -5,16 +5,19 @@ FS_lakes %>%
   ggplot(aes(x= year, y=z_SO4_mgL, color=lake_ID))+
   geom_point()+
   geom_smooth(method="lm")+
-  theme(legend.position="none")
+  theme(legend.position="none") +
+  labs(title="original data")
 
 #Re-calculate z-score
 FS_lakes %>%
   group_by(lake_ID) %>%
   mutate(z_SO4_mgL=scale(SO4_mgL)) %>%
-  ggplot(aes(x= year, y=z_SO4_mgL, color=lake_ID))+
+  ggplot(aes(x= year, y=SO4_mgL, color=lake_ID))+
   geom_point()+
   geom_smooth(method="lm")+
-  theme(legend.position="none")
+  theme(legend.position="none")+
+  labs(title="group by lake_ID for z-score")+
+  facet_wrap(~lake_ID, scales="free_y")
 
 
 ## get the trends and add that as a category for graphing

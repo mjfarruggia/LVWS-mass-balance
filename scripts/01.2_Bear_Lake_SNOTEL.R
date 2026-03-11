@@ -110,3 +110,9 @@ snow_data %>%
        title="SNOTEL at Bear Lake")
   # facet_wrap(~month)+
   # geom_smooth(method="gam")
+
+
+library(Rbeast)
+out = beast(SWE_stats$first_snow_melt_doy, season='none') #  'none': trend-only data without seasonlaity   
+print(out)                   
+plot(out)

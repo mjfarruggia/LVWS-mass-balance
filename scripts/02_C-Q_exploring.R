@@ -17,7 +17,7 @@ CQ_seasons <- outlet_daily_flux %>%
   mutate(wy_doy = hydro.day(date))
 
 # Pick DOC for now
-CQ_seasons_DOC <- CQ_seasons %>%
+CQ_seasons <- CQ_seasons %>%
   # filter(chem_name=="DOC") %>%
   group_by(waterYear) %>%
   # filter(waterYear=="2010") %>%
@@ -26,7 +26,7 @@ CQ_seasons_DOC <- CQ_seasons %>%
                                   date >= day_20th & date < day_50th ~ "rising limb",
                                   date >= day_50th & date <= day_80th ~ "falling limb"))
 
-CQ_seasons_DOC %>%
+CQ_seasons %>%
   filter(chem_name=="sio2_mgl") %>%
   group_by(waterYear, hydro_season) %>%
   summarize(chem_value = median(chem_value, na.rm=TRUE)) %>%
@@ -34,11 +34,27 @@ CQ_seasons_DOC %>%
   geom_point()+
   geom_smooth(method="gam")
 
-CQ_seasons_DOC %>%
+CQ_seasons %>%
   ggplot(aes(x=date, y=chem_value, color=hydro_season))+
-  geom_point()+
-  geom_smooth(method="lm")+
-  facet_wrap(~hydro_season, scales="free")
+  geom_point(alpha=0.1)+
+  geom_smooth(method="gam")+
+  facet_wrap(~chem_name, scales="free")
+
+CQ_seasons %>%
+  filter(chem_name=="DOC") %>%
+  filter(waterYear >= 1991) %>%
+  filter(hydro_season %in% c("rising limb","winter baseflow")) %>%
+  ggplot(aes(x=factor(waterYear), y=chem_value, fill=hydro_season))+
+  geom_boxplot(outlier.shape = NA)+
+  facet_wrap(~chem_name)
+
+CQ_seasons %>%
+  filter(chem_name=="NO3-N") %>%
+  filter(waterYear >= 1991) %>%
+  filter(hydro_season %in% c("rising limb","winter baseflow")) %>%
+  ggplot(aes(x=factor(waterYear), y=chem_value, fill=hydro_season))+
+  geom_boxplot(outlier.shape = NA)+
+  facet_wrap(~chem_name)
 
 
 # Calculate snowmelt ONSET ------------------
@@ -65,7 +81,7 @@ detect_snowmelt_onset <- function(df, window = 7, slope_threshold = 0.01) {
 # Adjust the window and slope_threshold based on local hydrograph characteristics.
 
 # Apply to each year
-snowmelt_onsets <- CQ_seasons_NO3 %>%
+snowmelt_onsets <- CQ_seasons %>%
   group_by(waterYear) %>%
   group_modify(~ {
     onset_date <- detect_snowmelt_onset(.x)
@@ -73,7 +89,7 @@ snowmelt_onsets <- CQ_seasons_NO3 %>%
   })
 
 
-CQ_seasons_NO3 %>%
+CQ_seasons %>%
   # filter(waterYear %in% c(1995, 2000, 2005)) %>%
   ggplot(aes(x = date, y = Q_m3s)) +
   geom_line() +
@@ -84,7 +100,7 @@ CQ_seasons_NO3 %>%
   labs(title = "Snowmelt Onset Detection", y = "Streamflow (m³/s)", x = "")
 
 
-CQ_seasons_NO3 %>%
+CQ_seasons %>%
   # filter(waterYear %in% c(1995, 2000, 2005)) %>%
   ggplot(aes(x = date, y = Q_m3s)) +
   geom_line() +
@@ -109,7 +125,7 @@ snowmelt_onsets %>%
 hydro_seasons_rawQ <- CQ_seasons %>%
   filter(waterYear>=1991 & !waterYear == "2022") %>% 
   filter(waterYear==2011) %>%
-  # filter(chem_name=="DOC") %>%
+  filter(chem_name=="cations") %>%
   ggplot(aes(x=date, y=Q_m3s, color=hydro_season))+
   geom_point()+
   facet_wrap(.~waterYear, scales="free_x")+
@@ -138,10 +154,11 @@ hydro_seasons_rawQ <- CQ_seasons %>%
 
 # How does this map onto cumulative discharge? 
 
-hydro_seasons_cumulQ <- CQ_seasons_NO3 %>%
+hydro_seasons_cumulQ <- CQ_seasons %>%
   group_by(waterYear)%>%
   mutate(cumulative_dis = cumsum(Q_m3s)) %>%
   filter(waterYear %in% c(2011)) %>%
+  filter(chem_name=="cations") %>%
   ggplot(aes(x = date, y = cumulative_dis)) +
   geom_line() +
   geom_vline(data = snowmelt_onsets %>% filter(waterYear %in% c(2011)),
@@ -158,7 +175,7 @@ hydro_seasons_cumulQ <- CQ_seasons_NO3 %>%
 
 
 hydro_seasons_rawQ / hydro_seasons_cumulQ + plot_layout(guides = "collect")
-ggsave("figures/hydro_season_definitions.png", dpi=600, width=4, height=6, units="in")
+# ggsave("figures/hydro_season_definitions.png", dpi=600, width=4, height=6, units="in")
 
 
 # One graph showing ridgelines for each parameter for distributions
@@ -332,7 +349,7 @@ CQ_seasons %>%
 
 CQ_seasons %>%
   # filter(waterYear>=1991 & !waterYear == "2022") %>% 
-  filter(waterYear=="2022") %>%
+  filter(waterYear %in% c("2019","2020","2021","2022")) %>%
   filter(chem_name=="cations") %>%
   mutate(wy_doy = hydro.day(date)) %>%
   ggplot(aes(x=Q_m3s, y=chem_value, color=wy_doy, shape = hydro_season))+

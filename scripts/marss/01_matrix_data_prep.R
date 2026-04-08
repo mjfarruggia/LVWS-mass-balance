@@ -98,9 +98,9 @@ unique(lv_wide$lake_ID)
 lv_no3 <- lv_wide %>%
   ungroup() %>%
   filter(lake_ID %in% c("sky", "loch", "andrewscreek")) %>%
-  filter(!is.na(z_NO3_mgL)) %>%
+  filter(!is.na(NO3_mgL)) %>%
   distinct(lake_ID, sampleLocation, datetimeDenver, .keep_all = TRUE)%>%
-  select(lake_ID, sampleLocation, datetimeDenver, year, z_NO3_mgL)
+  select(lake_ID, sampleLocation, datetimeDenver, year, NO3_mgL)
 
 lv_no3 <- lv_no3 %>%
   mutate(datetimeDenver = as.POSIXct(datetimeDenver)) %>%
@@ -113,14 +113,14 @@ lv_no3 <- lv_no3 %>%
 lv_no3_monthly <- lv_no3 %>%
   mutate( month = month(datetimeDenver)) %>%
   group_by(lake_ID, sampleLocation, year, month) %>%
-  summarise(z_NO3_mgL = mean(z_NO3_mgL, na.rm = TRUE),.groups = "drop") %>%
+  summarise(NO3_mgL = mean(NO3_mgL, na.rm = TRUE),.groups = "drop") %>%
   mutate(site = paste(lake_ID, sampleLocation, sep = "_"),
     date = as.Date(paste(year, month, "01", sep = "-")) )
 
 lv_no3_wide <- lv_no3_monthly %>%
-  select(date, site, z_NO3_mgL) %>%
+  select(date, site, NO3_mgL) %>%
   pivot_wider(names_from = date,
-    values_from = z_NO3_mgL)
+    values_from = NO3_mgL)
 
 #rearrange rows so it makes sense spatially
 site_order <- c(
@@ -155,20 +155,17 @@ bret_inorg_N <- monthly_nadp_bret %>%
     date = as.Date(paste(year, month_num, "01", sep = "-"))) %>%
   select(date, deposition_kg_per_ha_impute)
 
-bret_inorg_N_z <- bret_inorg_N %>%
-  mutate(deposition_z = scale(deposition_kg_per_ha_impute)[,1]) %>% 
-  ungroup()
 
 #add sites manually (repeat data) since this is just one nadp value for all of lvws
 sites <- c( "sky_in_n", "sky_in_s", "sky_ls", "sky_out", "andrewscreek","loch_in", "loch_ls", "loch_out")
-bret_inorg_N_z <- bret_inorg_N_z %>%
+bret_inorg_N <- bret_inorg_N %>%
   tidyr::crossing(site = sites)  %>%
   group_by(site, date) %>%
-  summarise(deposition_z = mean(deposition_z), .groups = "drop")
+  summarise(deposition = mean(deposition_kg_per_ha_impute), .groups = "drop")
 
 
-bret_inorg_n_matrix <- bret_inorg_N_z %>%
-  pivot_wider(names_from = date,values_from = deposition_z) %>%
+bret_inorg_n_matrix <- bret_inorg_N %>%
+  pivot_wider(names_from = date,values_from = deposition) %>%
   column_to_rownames("site") %>%
   as.matrix()
 
@@ -180,24 +177,19 @@ bret_inorg_n_matrix <- bret_inorg_N_z %>%
 
 #NADP deposition as another option
 base::load("data/marss/nadp.RData") 
-#z score it
-nadp_wetdep_z <- nadp_wetdep %>%
-  group_by(lake_ID) %>%   
-  mutate(TIN_N_kg_ha_z = scale(TIN_N_kg_ha)[,1] ) %>%
-  ungroup() %>%
-  mutate(site = tolower(lake_ID), date = as.Date(paste(year, month, "01", sep = "-")) )
+
 
 sites <- tibble(
   site = c("sky_in_n", "sky_in_s", "sky_ls", "sky_out","andrewscreek_shr", "loch_in", "loch_ls", "loch_out"),
   lake_site = c("sky", "sky", "sky", "sky", "andrewscreek", "loch", "loch", "loch"))
 
 nadp_tin_n_matrix <- sites %>%
-  left_join(nadp_wetdep_z %>%
+  left_join(nadp_wetdep %>%
       mutate(lake_site = tolower(lake_ID),
              date = as.Date(paste(year, month, "01", sep = "-"))) %>%
-      select(lake_site, date, TIN_N_kg_ha_z),by = "lake_site") %>%
-  select(site, date, TIN_N_kg_ha_z) %>%
-  pivot_wider(names_from = date, values_from = TIN_N_kg_ha_z) %>%
+      select(lake_site, date, TIN_N_kg_ha),by = "lake_site") %>%
+  select(site, date, TIN_N_kg_ha) %>%
+  pivot_wider(names_from = date, values_from = TIN_N_kg_ha) %>%
   column_to_rownames("site") %>%
   as.matrix()
 
@@ -208,47 +200,39 @@ nadp_tin_n_matrix <- sites %>%
 #for gridmet, sky/andrews creek share values and all the loch sites share values (2 groups)
 base::load("data/marss/climate.RData") 
 
-monthly_climate_z <- monthly_climate %>%
-  group_by( lake_ID) %>%  
-  mutate(
-    monthly_mean_temp_z    = scale(monthly_mean_temp, center = TRUE, scale = TRUE)[,1],
-    monthly_mean_pdsi_z    = scale(monthly_mean_pdsi, center = TRUE, scale = TRUE)[,1],
-    monthly_total_precip_z = scale(monthly_total_precip, center = TRUE, scale = TRUE)[,1]
-  ) %>%
-  ungroup()
 
 sites <- tibble(
   site = c("sky_in_n", "sky_in_s", "sky_ls", "sky_out","andrewscreek_shr", "loch_in", "loch_ls", "loch_out"),
   lake_site = c("sky", "sky", "sky", "sky", "andrewscreek", "loch", "loch", "loch"))
 
 temp_matrix <- sites %>%
-  left_join(monthly_climate_z %>%
+  left_join(monthly_climate %>%
       mutate(lake_site = tolower(lake_ID),
              date = as.Date(paste(year, month, "01", sep = "-"))) %>%
-      select(lake_site, date, monthly_mean_temp_z), by = "lake_site") %>%
-  select(site, date, monthly_mean_temp_z) %>%
-  pivot_wider(names_from = date, values_from = monthly_mean_temp_z) %>%
+      select(lake_site, date, monthly_mean_temp), by = "lake_site") %>%
+  select(site, date, monthly_mean_temp) %>%
+  pivot_wider(names_from = date, values_from = monthly_mean_temp) %>%
   column_to_rownames("site") %>%
   as.matrix()
 
 
 pdsi_matrix <- sites %>%
-  left_join(monthly_climate_z %>%
+  left_join(monthly_climate %>%
               mutate(lake_site = tolower(lake_ID),
                      date = as.Date(paste(year, month, "01", sep = "-"))) %>%
-              select(lake_site, date, monthly_mean_pdsi_z), by = "lake_site") %>%
-  select(site, date, monthly_mean_pdsi_z) %>%
-  pivot_wider(names_from = date, values_from = monthly_mean_pdsi_z) %>%
+              select(lake_site, date, monthly_mean_pdsi), by = "lake_site") %>%
+  select(site, date, monthly_mean_pdsi) %>%
+  pivot_wider(names_from = date, values_from = monthly_mean_pdsi) %>%
   column_to_rownames("site") %>%
   as.matrix()
 
 totalprecip_matrix <- sites %>%
-  left_join(monthly_climate_z %>%
+  left_join(monthly_climate %>%
               mutate(lake_site = tolower(lake_ID),
                      date = as.Date(paste(year, month, "01", sep = "-"))) %>%
-              select(lake_site, date, monthly_total_precip_z), by = "lake_site") %>%
-  select(site, date, monthly_total_precip_z) %>%
-  pivot_wider(names_from = date, values_from = monthly_total_precip_z) %>%
+              select(lake_site, date, monthly_total_precip), by = "lake_site") %>%
+  select(site, date, monthly_total_precip) %>%
+  pivot_wider(names_from = date, values_from = monthly_total_precip) %>%
   column_to_rownames("site") %>%
   as.matrix()
 

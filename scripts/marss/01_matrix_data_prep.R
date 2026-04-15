@@ -115,7 +115,8 @@ lv_no3_monthly <- lv_no3 %>%
   group_by(lake_ID, sampleLocation, year, month) %>%
   summarise(NO3_mgL = mean(NO3_mgL, na.rm = TRUE),.groups = "drop") %>%
   mutate(site = paste(lake_ID, sampleLocation, sep = "_"),
-    date = as.Date(paste(year, month, "01", sep = "-")) )
+    date = as.Date(paste(year, month, "01", sep = "-")) )%>%
+  arrange(date)
 
 lv_no3_wide <- lv_no3_monthly %>%
   select(date, site, NO3_mgL) %>%
@@ -236,6 +237,63 @@ totalprecip_matrix <- sites %>%
   column_to_rownames("site") %>%
   as.matrix()
 
+
+#clip all to chem dataframe
+# full monthly sequence spanning no3_matrix
+all_months <- seq(as.Date(colnames(no3_matrix)[1]), as.Date(colnames(no3_matrix)[ncol(no3_matrix)]), by = "month")
+all_months <- format(all_months, "%Y-%m-%d")
+
+# helper to reindex a covariate matrix to full monthly grid, filling gaps with NA
+align_to_grid <- function(mat, grid) {
+  out <- matrix(NA, nrow = nrow(mat), ncol = length(grid))
+  rownames(out) <- rownames(mat)
+  colnames(out) <- grid
+  matched <- intersect(grid, colnames(mat))
+  out[, matched] <- mat[, matched]
+  out
+}
+
+no3_matrix              <- align_to_grid(no3_matrix, all_months)
+nadp_tin_n_matrix   <- align_to_grid(nadp_tin_n_matrix, all_months)
+bret_inorg_n_matrix   <- align_to_grid(bret_inorg_n_matrix, all_months)
+temp_matrix         <- align_to_grid(temp_matrix, all_months)
+totalprecip_matrix       <- align_to_grid(totalprecip_matrix, all_months)
+pdsi_matrix         <- align_to_grid(pdsi_matrix, all_months)
+
+# verify
+ncol(no3_matrix); ncol(nadp_tin_n_matrix); ncol(bret_inorg_n_matrix); ncol(temp_matrix); ncol(totalprecip_matrix); ncol(pdsi_matrix)
+
+# are there NAs in each covariate?
+range(which(is.na(nadp_tin_n_matrix)))
+range(which(is.na(bret_inorg_n_matrix)))
+range(which(is.na(temp_matrix)))
+range(which(is.na(totalprecip_matrix)))
+range(which(is.na(pdsi_matrix)))
+
+#trim matrices so the covariates don't have NAs
+no3_matrix          <- no3_matrix[, 16:(ncol(no3_matrix)-4)]
+nadp_tin_n_matrix   <- nadp_tin_n_matrix[, 16:(ncol(nadp_tin_n_matrix)-4)]
+bret_inorg_n_matrix <- bret_inorg_n_matrix[, 16:(ncol(bret_inorg_n_matrix)-4)]
+temp_matrix         <- temp_matrix[, 16:(ncol(temp_matrix)-4)]
+totalprecip_matrix  <- totalprecip_matrix[, 16:(ncol(totalprecip_matrix)-4)]
+pdsi_matrix         <- pdsi_matrix[, 16:(ncol(pdsi_matrix)-4)]
+
+# are there NAs in each covariate?
+range(which(is.na(nadp_tin_n_matrix)))
+range(which(is.na(bret_inorg_n_matrix)))
+range(which(is.na(temp_matrix)))
+range(which(is.na(totalprecip_matrix)))
+range(which(is.na(pdsi_matrix)))
+
+colnames(no3_matrix)[1]; colnames(no3_matrix)[ncol(no3_matrix)]; ncol(no3_matrix)
+colnames(nadp_tin_n_matrix)[1]; colnames(nadp_tin_n_matrix)[ncol(nadp_tin_n_matrix)]; ncol(nadp_tin_n_matrix)
+colnames(bret_inorg_n_matrix)[1]; colnames(bret_inorg_n_matrix)[ncol(bret_inorg_n_matrix)]; ncol(bret_inorg_n_matrix)
+colnames(temp_matrix)[1]; colnames(temp_matrix)[ncol(temp_matrix)]; ncol(temp_matrix)
+colnames(totalprecip_matrix)[1]; colnames(totalprecip_matrix)[ncol(totalprecip_matrix)]; ncol(totalprecip_matrix)
+colnames(pdsi_matrix)[1]; colnames(pdsi_matrix)[ncol(pdsi_matrix)]; ncol(pdsi_matrix)
+
+
+ncol(no3_matrix); ncol(nadp_tin_n_matrix); ncol(bret_inorg_n_matrix); ncol(temp_matrix); ncol(totalprecip_matrix); ncol(pdsi_matrix)
 
 #save all the matrices as ts_matrices.rdata file for easy loading into the marss script
 # save all matrices into one .RData file

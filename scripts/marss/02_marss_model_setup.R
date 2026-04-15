@@ -29,17 +29,18 @@ nadp_tin_n <- nadp_tin_n[1, , drop = FALSE]
   the.sigma <-sqrt( apply(nadp_tin_n,1,var, na.rm=TRUE))
   nadp_tin_n_z <-(nadp_tin_n-the.mean)*(1/the.sigma)#z-score data
 
-#bret's deposition
-tin_n_bret <- bret_inorg_n_matrix 
-  #make matrix 1 row since only 1 value for the watershed
-  tin_n_bret <- tin_n_bret[1, , drop = FALSE]
-    rownames(tin_n_bret)<- 'LVWS' #one value for the whole watershed
+#bret's deposition - stops in 2022 and only has summer
+# tin_n_bret <- bret_inorg_n_matrix
+#   #make matrix 1 row since only 1 value for the watershed
+#   tin_n_bret <- tin_n_bret[1, , drop = FALSE]
+#     rownames(tin_n_bret)<- 'LVWS' #one value for the whole watershed
+# 
+#   #z score
+#   the.mean <- apply(tin_n_bret,1, mean, na.rm=TRUE)
+#   the.sigma <-sqrt( apply(tin_n_bret,1,var, na.rm=TRUE))
+#   tin_n_bret_z <-(tin_n_bret-the.mean)*(1/the.sigma)#z-score data
+#   tin_n_bret_z <- tin_n_bret_z[, !is.na(colnames(tin_n_bret_z)) & colnames(tin_n_bret_z) != "NA", drop = FALSE]
   
-  #z score
-  the.mean <- apply(tin_n_bret,1, mean, na.rm=TRUE)
-  the.sigma <-sqrt( apply(tin_n_bret,1,var, na.rm=TRUE))
-  tin_n_bret_z <-(tin_n_bret-the.mean)*(1/the.sigma)#z-score data
-
 #mean temp
 temp <- temp_matrix
   #make matrix 2 rows since only 2 values for the watershed
@@ -78,6 +79,14 @@ apply(temp_z,1,var, na.rm = TRUE)
 apply(precip_z,1,var, na.rm = TRUE)
 apply(pdsi_z,1,var, na.rm = TRUE)
 
+#check that they're all the same length/dates
+colnames(y)[1]; colnames(y)[ncol(y)]; ncol(y)
+colnames(nadp_tin_n_z)[1]; colnames(nadp_tin_n_z)[ncol(nadp_tin_n_z)]; ncol(nadp_tin_n_z)
+colnames(tin_n_bret_z)[1]; colnames(tin_n_bret_z)[ncol(tin_n_bret_z)]; ncol(tin_n_bret_z)
+colnames(temp_z)[1]; colnames(temp_z)[ncol(temp_z)]; ncol(temp_z)
+colnames(precip_z)[1]; colnames(precip_z)[ncol(precip_z)]; ncol(precip_z)
+colnames(pdsi_z)[1]; colnames(pdsi_z)[ncol(pdsi_z)]; ncol(pdsi_z)
+
 ######################################################################################################################################################################################################
 ##Create inputs to MARSS function (matrices):
 #Create names of models to run: (list) ###UPDATE THIS WHEN TRYING NEW SETS OF MODELS!!!!!!
@@ -115,18 +124,23 @@ apply(pdsi_z,1,var, na.rm = TRUE)
 #Set of models primarily testing different Q structures (e.g. process variance) and C structures (e.g. covariate effects)
 
 mod.names <- c(
-  "mod8.1de","mod8.1bp","mod8.1du","mod8.1bp_cov",
+  "mod8.1de","mod8.1bp","mod8.1du","mod8.1bp_cov",                 #no covariates
   
   "mod8.2de_sh","mod8.2bp_sh","mod8.2du_sh","mod8.2bp_cov_sh",
-  "mod8.2de_sep","mod8.2bp_sep","mod8.2du_sep","mod8.2bp_cov_sep",
+  "mod8.2de_sep","mod8.2bp_sep","mod8.2du_sep","mod8.2bp_cov_sep", #nadp
   
-  "mod8.3de_sh","mod8.3bp_sh","mod8.3du_sh","mod8.3bp_cov_sh",
-  "mod8.3de_sep","mod8.3bp_sep","mod8.3du_sep","mod8.3bp_cov_sep",
+  # "mod8.3de_sh","mod8.3bp_sh","mod8.3du_sh","mod8.3bp_cov_sh",
+  # "mod8.3de_sep","mod8.3bp_sep","mod8.3du_sep","mod8.3bp_cov_sep", #bret's deposition
   
-  "mod8.4de_sh","mod8.4bp_sh","mod8.4du_sh","mod8.4bp_cov_sh",
-  "mod8.4de_sep","mod8.4bp_sep","mod8.4du_sep","mod8.4bp_cov_sep"
+  "mod8.4de_sh","mod8.4bp_sh","mod8.4du_sh","mod8.4bp_cov_sh",     #temp     
+  "mod8.4de_sep","mod8.4bp_sep","mod8.4du_sep","mod8.4bp_cov_sep",
+  
+  "mod8.5de_sh","mod8.5bp_sh","mod8.5du_sh","mod8.5bp_cov_sh",     #precip
+  "mod8.5de_sep","mod8.5bp_sep","mod8.5du_sep","mod8.5bp_cov_sep",
+  
+  "mod8.6de_sh","mod8.6bp_sh","mod8.6du_sh","mod8.6bp_cov_sh",    #pdsi
+  "mod8.6de_sep","mod8.6bp_sep","mod8.6du_sep","mod8.6bp_cov_sep"
 )
-
 #Number of models
 nmods <- length(mod.names)
 
@@ -159,17 +173,17 @@ diag(bp_cov)<- c('var.sky','var.sky','var.sky','var.sky','var.andrews','var.loch
 # --- sky cluster (sky in n = 1, sky in s =2, sky ls = 3, sky out=4) ---
 bp_cov[1,2] <- bp_cov[2,1] <- "cov.sky"
 bp_cov[1,3] <- bp_cov[3,1] <- "cov.sky"
-bp_cov[2,5] <- bp_cov[5,2] <- "cov.sky"
-bp_cov[2,5] <- bp_cov[5,2] <- "cov.sky"
+bp_cov[1,4] <- bp_cov[4,1] <- "cov.sky"
+bp_cov[2,3] <- bp_cov[3,2] <- "cov.sky"
+bp_cov[2,4] <- bp_cov[4,2] <- "cov.sky"
+bp_cov[3,4] <- bp_cov[4,3] <- "cov.sky"
 
-#andrews by itself (andrews = 5)---
-bp_cov[1,2] <- bp_cov[2,1] <- "cov.andrews"
+#andrews by itself (andrews = 5), no off diag covariance
 
 # --- loch cluster (loch in = 6, loch ls = 7, loch out = 8) ---
-bp_cov[3,4] <- bp_cov[4,3] <- "cov.loch"
-bp_cov[3,8] <- bp_cov[8,3] <- "cov.loch"
-bp_cov[4,8] <- bp_cov[8,4] <- "cov.loch"
-bp_cov[4,8] <- bp_cov[8,4] <- "cov.loch"
+bp_cov[6,7] <- bp_cov[7,6] <- "cov.loch"
+bp_cov[6,8] <- bp_cov[8,6] <- "cov.loch"
+bp_cov[7,8] <- bp_cov[8,7] <- "cov.loch"
 bp_cov
 
 Q.list <- list('diagonal and equal',bp,'diagonal and unequal', bp_cov)
@@ -202,44 +216,45 @@ V0.model <- 'zero'
 #no covariates
 nocovar <- matrix(0)
 #List of all covariate matrices....UPDATE THIS!!
-c.list <- list(nocovar, nadp_tin_n_z, tin_n_bret_z, temp_z, precip_z, pdsi_z)
-c.list[[6]]
+c.list <- list(nocovar, nadp_tin_n_z,  temp_z, precip_z, pdsi_z)
+c.list[[2]]
 
 ##C (matrix that maps covariates to the state processes)
 #8 states
 #No covariates
 C_8.1 <- matrix(0,nrow=nsites)
 
-#nadp tin n 
-C_8.2_sh <-  matrix(list('sw','sw',0,0,'sw',0,0,0,'sw','sw',0,'sw'),nsites,2)
-C_8.2_sep <- matrix(list('sw.EMLPond1','sw.TOK11',0,0,'sw.EmeraldLake',0,0,0,'sw.TopazPond','sw.TOK30',0,'sw.TopazLake'),
-                    nsites,2)
-#bret tin n
-rownames(smoke_z)
-C_8.3_sh <-  matrix(list('smoke','smoke',0,0,'smoke',0,0,0,'smoke','smoke',0,'smoke'),nsites,2)
-C_8.3_sep <- matrix(list('smoke.EMLPond1','smoke.TOK11',0,0,'smoke.EmeraldLake',0,0,0,'smoke.TopazPond','smoke.TOK30',0,'smoke.TopazLake'),
-                    nsites,2)
-#temp
-rownames(y)
-rownames(pm2.5_z)
-C_8.4_sh <-  matrix(list('pm','pm','pm','pm','pm','pm'),nsites,1)
-C_8.4_sep <- matrix(list('pm.EMLPond1','pm.TOK11','pm.TopazPond','pm.TOK30','pm.EmeraldLake','pm.TopazLake'),
-                    nsites,1)
 
-#precip
-rownames(y)
-rownames(pm2.5_z)
-C_8.4_sh <-  matrix(list('pm','pm','pm','pm','pm','pm'),nsites,1)
-C_8.4_sep <- matrix(list('pm.EMLPond1','pm.TOK11','pm.TopazPond','pm.TOK30','pm.EmeraldLake','pm.TopazLake'),
-                    nsites,1)
+# 2: NADP TIN (1 row: LVWS - single watershed value)
+C_8.2_sh  <- matrix(list('tin','tin','tin','tin','tin','tin','tin','tin'), nsites, 1)
+C_8.2_sep <- matrix(list('tin.sky_in_n','tin.sky_in_s','tin.sky_ls','tin.sky_out',
+                         'tin.andrews','tin.loch_in','tin.loch_ls','tin.loch_out'), nsites, 1)
 
-#pdsi
-rownames(y)
-rownames(pm2.5_z)
-C_8.4_sh <-  matrix(list('pm','pm','pm','pm','pm','pm'),nsites,1)
-C_8.4_sep <- matrix(list('pm.EMLPond1','pm.TOK11','pm.TopazPond','pm.TOK30','pm.EmeraldLake','pm.TopazLake'),
-                    nsites,1)
-C.list <- list(C_8.1, C_8.2_sh, C_8.2_sep, C_8.3_sh, C_8.3_sep,C_8.4_sh, C_8.4_sep)
+# # 3: Bret's TIN (1 row: LVWS - single watershed value)
+# C_8.3_sh  <- matrix(list('bret_tin','bret_tin','bret_tin','bret_tin','bret_tin','bret_tin','bret_tin','bret_tin'), nsites, 1)
+# C_8.3_sep <- matrix(list('bret_tin.sky_in_n','bret_tin.sky_in_s','bret_tin.sky_ls','bret_tin.sky_out',
+#                          'bret_tin.andrews','bret_tin.loch_in','bret_tin.loch_ls','bret_tin.loch_out'), nsites, 1)
+
+# 4: Temp (2 rows: temp_upper = sky+andrews [col1], temp_lower = loch [col2])
+C_8.4_sh  <- matrix(list('temp_upper','temp_upper','temp_upper','temp_upper','temp_upper',0,0,0,
+                         0,0,0,0,0,'temp_lower','temp_lower','temp_lower'), nsites, 2)
+C_8.4_sep <- matrix(list('temp_upper.sky_in_n','temp_upper.sky_in_s','temp_upper.sky_ls','temp_upper.sky_out','temp_upper.andrews',0,0,0,
+                         0,0,0,0,0,'temp_lower.loch_in','temp_lower.loch_ls','temp_lower.loch_out'), nsites, 2)
+
+# 5: Precip (2 rows: precip_upper = sky+andrews [col1], precip_lower = loch [col2])
+C_8.5_sh  <- matrix(list('precip_upper','precip_upper','precip_upper','precip_upper','precip_upper',0,0,0,
+                         0,0,0,0,0,'precip_lower','precip_lower','precip_lower'), nsites, 2)
+C_8.5_sep <- matrix(list('precip_upper.sky_in_n','precip_upper.sky_in_s','precip_upper.sky_ls','precip_upper.sky_out','precip_upper.andrews',0,0,0,
+                         0,0,0,0,0,'precip_lower.loch_in','precip_lower.loch_ls','precip_lower.loch_out'), nsites, 2)
+
+# 6: PDSI (2 rows: pdsi_upper = sky+andrews [col1], pdsi_lower = loch [col2])
+C_8.6_sh  <- matrix(list('pdsi_upper','pdsi_upper','pdsi_upper','pdsi_upper','pdsi_upper',0,0,0,
+                         0,0,0,0,0,'pdsi_lower','pdsi_lower','pdsi_lower'), nsites, 2)
+C_8.6_sep <- matrix(list('pdsi_upper.sky_in_n','pdsi_upper.sky_in_s','pdsi_upper.sky_ls','pdsi_upper.sky_out','pdsi_upper.andrews',0,0,0,
+                         0,0,0,0,0,'pdsi_lower.loch_in','pdsi_lower.loch_ls','pdsi_lower.loch_out'), nsites, 2)
+
+
+C.list <- list(C_8.1, C_8.2_sh, C_8.2_sep, C_8.4_sh, C_8.4_sep,C_8.5_sh, C_8.5_sep,C_8.6_sh, C_8.6_sep)
 C.list[[7]]
 
 ########################################################################################################################################################################################################################################
@@ -247,28 +262,44 @@ C.list[[7]]
 #ncol= number of parameter matrices in MARSS equation
 
 #Empty matrix
-combos <- matrix(0,nmods, length(mat.names), dimnames=list(mod.names,mat.names))
-#B
-combos[,1] <- rep(1,nmods)#B=identity
-#Q
-#combos[,2] <-c(rep(1:3,(nmods/3))) 
-combos[,2] <-c(rep(1:4,(nmods/4))) 
+combos <- matrix(0, nmods, length(mat.names), dimnames = list(mod.names, mat.names))
 
-#Z
-combos[,3] <- c(rep(1,nmods))#Z=identity
-#R
-combos[,4] <- rep(1,nmods)#start with diagonal and equal
-#c:  which covariates to use
-combos[,7] <- c(rep(1,4),rep(2,8),rep(3,8),rep(4,8))
-#C
-combos[,8] <- c(rep(1,4), rep(2,4), rep(3,4),rep(4,4), rep(5,4),rep(8,4),rep(7,4))
+#B: identity for all models
+combos[,1] <- rep(1, nmods)
+
+#Q: cycles through 4 Q structures (de, bp, du, bp_cov) across all 10 groups of 4
+combos[,2] <- rep(1:4, nmods/4)
+
+#Z: identity for all models
+combos[,3] <- rep(1, nmods)
+
+#R: diagonal and equal for all models
+combos[,4] <- rep(1, nmods)
+
+#c: which covariate matrix to use
+# 1=none(4 mods), 2=nadp(8), 3=bret(8), 4=temp(8), 5=precip(8), 6=pdsi(8)
+combos[,7] <- c(rep(1,4), rep(2,8), rep(3,8), rep(4,8), rep(5,8))
+
+#C: which C matrix to use
+# no covar: C_8.1(1)
+# nadp:     C_8.2_sh(2), C_8.2_sep(3)
+# bret:     C_8.3_sh(4), C_8.3_sep(5)
+# temp:     C_8.4_sh(6), C_8.4_sep(7)
+# precip:   C_8.5_sh(8), C_8.5_sep(9)
+# pdsi:     C_8.6_sh(10),C_8.6_sep(11)
+combos[,8] <- c(rep(1,4),
+                rep(2,4), rep(3,4),  # nadp sh, sep
+                rep(4,4), rep(5,4),  # temp sh, sep
+                rep(6,4), rep(7,4),  # precip sh, sep
+                rep(8,4), rep(9,4))  # pdsi sh, sep
+
 #check to make sure it's correct!
 combos
 
 ####################################################################################################################################################################################################################################################
 # This loop runs the MARSS function for all the combinations of model parameters contained in the matrix 'combos'
 #and stores the output in the list 'mod.output'
-for(i in 1:nrow(combos)){
+for(i in 29:nrow(combos)){
   #select model structure and parameters
   #change this so that it uses combo matrix to index correct parameters
   mod.list <- list(B=B.list[[combos[i,1]]], Q=Q.list[[combos[i,2]]], Z=Z.list[[combos[i,3]]], R=R.list[[combos[i,4]]] ,
@@ -287,3 +318,48 @@ for(i in 1:nrow(combos)){
 #Check what's in mod.output
 mod.output[[4]]
 names(mod.output)
+
+
+
+
+# Extract AIC, AICc, logLik, and convergence status from all models
+summary_df <- data.frame(
+  model    = mod.names,
+  covariate = c(rep("none",4), rep("nadp",8), rep("temp",8), rep("precip",8), rep("pdsi",8)),
+  Q_struct  = rep(c("de","bp","du","bp_cov"), nmods/4),
+  effect    = c(rep("none",4),
+                rep(c(rep("sh",4), rep("sep",4)), 4)),
+  logLik   = sapply(mod.output, function(m) m$logLik),
+  AIC      = sapply(mod.output, function(m) m$AIC),
+  AICc     = sapply(mod.output, function(m) m$AICc),
+  converged = sapply(mod.output, function(m) m$convergence == 0),
+  stringsAsFactors = FALSE
+)
+
+# rank by AICc
+summary_df <- summary_df[order(summary_df$AICc),]
+summary_df$delta_AICc <- summary_df$AICc - min(summary_df$AICc)
+
+
+
+
+# rerun non-converged models with higher maxit
+no_conv <- which(sapply(mod.output, function(m) m$convergence != 0))
+names(mod.output)[no_conv]  # check which ones
+
+for(i in no_conv){
+  mod.list <- list(B=B.list[[combos[i,1]]], Q=Q.list[[combos[i,2]]], Z=Z.list[[combos[i,3]]], R=R.list[[combos[i,4]]],
+                   A=A.list, U=U.list, c=c.list[[combos[i,7]]], C=C.list[[combos[i,8]]], x0=x0.model, V0=V0.model, tinitx=1)
+  mod.output[[i]] <- tryCatch(
+    MARSS(y, model=mod.list, control=list(maxit=5000)),
+    error = function(e) { message("Model ", mod.names[i], " failed: ", e$message); NULL }
+  )
+  names(mod.output)[i] <- mod.names[i] #replace in mod.output if they converged
+
+}
+
+
+#Save model output as Rdata file, to use in other scripts:
+save(mod.output, file="Data/marss/LVWS_output_04082026.Rdata")
+
+

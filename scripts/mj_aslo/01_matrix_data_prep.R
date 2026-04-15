@@ -1,9 +1,7 @@
 library(tidyverse)
-lv <- read.csv("data/marss/LV_chemistry.csv")
+lv <- read.csv("data/mj_aslo/LV_chemistry.csv")
 
 #----data prep------------------------------------------------------------------------------
-
-
 
 unique(lv$sampleLocation)
 
@@ -147,7 +145,7 @@ no3_matrix <- lv_no3_wide %>%
 
 
 #deposition marss matrix---------------------------------------------------------------------
-monthly_nadp_bret <- read.csv("data/marss/monthly_dep_lvws.csv")
+monthly_nadp_bret <- read.csv("data/mj_aslo/monthly_dep_lvws.csv")
 
 bret_inorg_N <- monthly_nadp_bret %>%
   filter(deposition_name == "Inorganic N") %>%
@@ -177,7 +175,7 @@ bret_inorg_n_matrix <- bret_inorg_N %>%
 
 
 #NADP deposition as another option
-base::load("data/marss/nadp.RData") 
+base::load("data/mj_aslo/nadp.RData") 
 
 
 sites <- tibble(
@@ -199,7 +197,7 @@ nadp_tin_n_matrix <- sites %>%
 
 #gridmet first, until met station data is available
 #for gridmet, sky/andrews creek share values and all the loch sites share values (2 groups)
-base::load("data/marss/climate.RData") 
+base::load("data/mj_aslo/climate.RData") 
 
 
 sites <- tibble(
@@ -295,6 +293,72 @@ colnames(pdsi_matrix)[1]; colnames(pdsi_matrix)[ncol(pdsi_matrix)]; ncol(pdsi_ma
 
 ncol(no3_matrix); ncol(nadp_tin_n_matrix); ncol(bret_inorg_n_matrix); ncol(temp_matrix); ncol(totalprecip_matrix); ncol(pdsi_matrix)
 
+
+
+
+
+
+#try a de-seasonalized and de-trended temperature anomaly 
+  #do we have to de-trend, or will marss take care of this?
+#check out forecast R package
+#iao: look into STL (seasonal trend decomposition using loess), should help detect anomalies in the timeseries after deseasonalizing/detrending
+
+library(forecast)
+#use stl: Decompose a time series into seasonal, trend and irregular components using loess, acronym STL.
+
+#shared temp across all sites -----
+
+temp_ts_mean <- colMeans(temp_matrix, na.rm = TRUE)
+temp_ts_mean <- ts(temp_ts_mean, frequency = 12, start = c(1981, 1))
+
+# STL decomposition
+stl_mean <- stl(temp_ts_mean, s.window = "periodic")
+
+# anomaly = remainder
+anomaly_shared_stl <- stl_mean$time.series[, "remainder"]
+
+plot(stl_mean)
+
+temp_anomaly_shared <- t(matrix(as.numeric(anomaly_shared_stl), ncol = 1))
+
+
+#site-specific temp -----
+n_time <- ncol(temp_matrix)
+
+temp_anomaly_bysite <- matrix(NA, nrow = nrow(temp_matrix), ncol = n_time)
+fitted_bysite  <- matrix(NA, nrow = nrow(temp_matrix), ncol = n_time)
+
+for (i in seq_len(nrow(temp_matrix))) {
+    y <- ts(temp_matrix[i, ], frequency = 12, start = c(1981, 1))
+    stl_fit <- stl(y, s.window = "periodic")
+  #save trend+ seasonal, and also remainder. use remainder as marss input
+      fitted_bysite[i, ]  <- stl_fit$time.series[, "trend"] +
+    stl_fit$time.series[, "seasonal"]
+      temp_anomaly_bysite[i, ] <- stl_fit$time.series[, "remainder"]
+}
+
+#plot
+stl_list <- lapply(seq_len(nrow(temp_matrix)), function(i) {
+  ts_i <- ts(temp_matrix[i, ], frequency = 12, start = c(1981, 1))
+  stl(ts_i, s.window = "periodic")})
+
+plot(stl_list[[1]])  #there's really only 2 versions (not 8) since there's just 2 gridmet cells
+plot(stl_list[[8]])
+
+
+
+str(temp_anomaly_shared)
+str(temp_anomaly_bysite)
+
+colnames(temp_anomaly_shared) <- colnames(temp_matrix) 
+
+colnames(temp_anomaly_bysite) <- colnames(temp_matrix) 
+rownames(temp_anomaly_bysite) <- rownames(temp_matrix)
+ncol(temp_matrix)
+ncol(temp_anomaly_shared)
+ncol(temp_anomaly_bysite)
+
+
 #save all the matrices as ts_matrices.rdata file for easy loading into the marss script
 # save all matrices into one .RData file
 save(
@@ -303,5 +367,7 @@ save(
   no3_matrix,
   pdsi_matrix,
   temp_matrix,
+  temp_anomaly_bysite,
+  temp_anomaly_shared,
   totalprecip_matrix,
-  file = "data/marss/ts_matrices.RData")
+  file = "data/mj_aslo/ts_matrices.RData")

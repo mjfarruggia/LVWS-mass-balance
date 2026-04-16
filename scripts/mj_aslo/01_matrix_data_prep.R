@@ -1,4 +1,7 @@
+source("functions/00_functions.R")
+source("functions/00_libraries.R")
 library(tidyverse)
+
 lv <- read.csv("data/mj_aslo/LV_chemistry.csv")
 
 #----data prep------------------------------------------------------------------------------
@@ -14,11 +17,11 @@ lv_filtered <- lv %>%
     sampleReplicate == 1) 
 
 
-ggplot(lv_filtered, aes(x = month(date, label = TRUE), fill = factor(year))) +
-  geom_bar(position = "dodge") +
-  labs(title = "Monthly Sampling by Year", x = "Month", y = "Count", fill = "Year")+
-  facet_wrap(site~sampleLocation, scales = "free_y") +
-  theme_bw()
+# ggplot(lv_filtered, aes(x = month(date, label = TRUE), fill = factor(year))) +
+#   geom_bar(position = "dodge") +
+#   labs(title = "Monthly Sampling by Year", x = "Month", y = "Count", fill = "Year")+
+#   facet_wrap(site~sampleLocation, scales = "free_y") +
+#   theme_bw()
 
 
 lv_wide <- lv_filtered %>%
@@ -116,10 +119,26 @@ lv_no3_monthly <- lv_no3 %>%
     date = as.Date(paste(year, month, "01", sep = "-")) )%>%
   arrange(date)
 
-lv_no3_wide <- lv_no3_monthly %>%
+lv_no3_monthly$date <- as.Date(lv_no3_monthly$date)
+
+lv_no3_monthly_wide <- lv_no3_monthly %>%
   select(date, site, NO3_mgL) %>%
   pivot_wider(names_from = date,
     values_from = NO3_mgL)
+
+#daily
+lv_no3_daily <- lv_no3 %>%
+  arrange(datetimeDenver)%>%
+  mutate(site = paste(lake_ID, sampleLocation, sep = "_"))%>%
+  mutate(date = as.Date(datetimeDenver))
+
+lv_no3_daily$date <- as.Date(lv_no3_daily$date)
+
+
+lv_no3_daily_wide <- lv_no3_daily %>%
+  select(date, site, NO3_mgL) %>%
+  pivot_wider(names_from = date,
+              values_from = NO3_mgL)
 
 #rearrange rows so it makes sense spatially
 site_order <- c(
@@ -132,19 +151,34 @@ site_order <- c(
   "loch_ls",
   "loch_out")
 
-lv_no3_wide<- lv_no3_wide %>%
+lv_no3_monthly_wide<- lv_no3_monthly_wide %>%
   mutate(site = factor(site, levels = site_order)) %>%
   arrange(site)
 
+lv_no3_daily_wide<- lv_no3_daily_wide %>%
+  mutate(site = factor(site, levels = site_order)) %>%
+  arrange(site)
 
 #marss format
-no3_matrix <- lv_no3_wide %>%
+monthly_no3_matrix <- lv_no3_monthly_wide %>%
+  column_to_rownames("site") %>%  
+  as.matrix()
+
+daily_no3_matrix <- lv_no3_daily_wide %>%
   column_to_rownames("site") %>%  
   as.matrix()
 
 
+# ggplot(lv_no3_daily, aes(datetimeDenver, NO3_mgL, color = site)) +
+#   geom_point(alpha = 0.7) +
+#   facet_wrap(~site) +
+#   scale_x_datetime(date_breaks = "1 year", date_labels = "%Y") +
+#   theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1)) 
 
-#deposition marss matrix---------------------------------------------------------------------
+#use 1984 to 2023
+#exclude sky_in_s
+
+#deposition marss matrix (this data is monthly) ---------------------------------------------------------------------
 monthly_nadp_bret <- read.csv("data/mj_aslo/monthly_dep_lvws.csv")
 
 bret_inorg_N <- monthly_nadp_bret %>%
@@ -162,6 +196,7 @@ bret_inorg_N <- bret_inorg_N %>%
   group_by(site, date) %>%
   summarise(deposition = mean(deposition_kg_per_ha_impute), .groups = "drop")
 
+bret_inorg_N$date <- as.Date(bret_inorg_N$date)
 
 bret_inorg_n_matrix <- bret_inorg_N %>%
   pivot_wider(names_from = date,values_from = deposition) %>%
@@ -204,13 +239,23 @@ sites <- tibble(
   site = c("sky_in_n", "sky_in_s", "sky_ls", "sky_out","andrewscreek_shr", "loch_in", "loch_ls", "loch_out"),
   lake_site = c("sky", "sky", "sky", "sky", "andrewscreek", "loch", "loch", "loch"))
 
-temp_matrix <- sites %>%
+monthly_temp_matrix <- sites %>%
   left_join(monthly_climate %>%
       mutate(lake_site = tolower(lake_ID),
              date = as.Date(paste(year, month, "01", sep = "-"))) %>%
       select(lake_site, date, monthly_mean_temp), by = "lake_site") %>%
   select(site, date, monthly_mean_temp) %>%
   pivot_wider(names_from = date, values_from = monthly_mean_temp) %>%
+  column_to_rownames("site") %>%
+  as.matrix()
+
+daily_temp_matrix <- sites %>%
+  left_join(daily_climate %>%
+              mutate(lake_site = tolower(lake_ID),
+                     mean_temp = (tmmn+tmmx)/2) %>%
+              select(lake_site, date, mean_temp), by = "lake_site") %>%
+  select(site, date, mean_temp) %>%
+  pivot_wider(names_from = date, values_from = mean_temp) %>%
   column_to_rownames("site") %>%
   as.matrix()
 
@@ -236,69 +281,12 @@ totalprecip_matrix <- sites %>%
   as.matrix()
 
 
-#clip all to chem dataframe
-# full monthly sequence spanning no3_matrix
-all_months <- seq(as.Date(colnames(no3_matrix)[1]), as.Date(colnames(no3_matrix)[ncol(no3_matrix)]), by = "month")
-all_months <- format(all_months, "%Y-%m-%d")
-
-# helper to reindex a covariate matrix to full monthly grid, filling gaps with NA
-align_to_grid <- function(mat, grid) {
-  out <- matrix(NA, nrow = nrow(mat), ncol = length(grid))
-  rownames(out) <- rownames(mat)
-  colnames(out) <- grid
-  matched <- intersect(grid, colnames(mat))
-  out[, matched] <- mat[, matched]
-  out
-}
-
-no3_matrix              <- align_to_grid(no3_matrix, all_months)
-nadp_tin_n_matrix   <- align_to_grid(nadp_tin_n_matrix, all_months)
-bret_inorg_n_matrix   <- align_to_grid(bret_inorg_n_matrix, all_months)
-temp_matrix         <- align_to_grid(temp_matrix, all_months)
-totalprecip_matrix       <- align_to_grid(totalprecip_matrix, all_months)
-pdsi_matrix         <- align_to_grid(pdsi_matrix, all_months)
-
-# verify
-ncol(no3_matrix); ncol(nadp_tin_n_matrix); ncol(bret_inorg_n_matrix); ncol(temp_matrix); ncol(totalprecip_matrix); ncol(pdsi_matrix)
-
-# are there NAs in each covariate?
-range(which(is.na(nadp_tin_n_matrix)))
-range(which(is.na(bret_inorg_n_matrix)))
-range(which(is.na(temp_matrix)))
-range(which(is.na(totalprecip_matrix)))
-range(which(is.na(pdsi_matrix)))
-
-#trim matrices so the covariates don't have NAs
-no3_matrix          <- no3_matrix[, 16:(ncol(no3_matrix)-4)]
-nadp_tin_n_matrix   <- nadp_tin_n_matrix[, 16:(ncol(nadp_tin_n_matrix)-4)]
-bret_inorg_n_matrix <- bret_inorg_n_matrix[, 16:(ncol(bret_inorg_n_matrix)-4)]
-temp_matrix         <- temp_matrix[, 16:(ncol(temp_matrix)-4)]
-totalprecip_matrix  <- totalprecip_matrix[, 16:(ncol(totalprecip_matrix)-4)]
-pdsi_matrix         <- pdsi_matrix[, 16:(ncol(pdsi_matrix)-4)]
-
-# are there NAs in each covariate?
-range(which(is.na(nadp_tin_n_matrix)))
-range(which(is.na(bret_inorg_n_matrix)))
-range(which(is.na(temp_matrix)))
-range(which(is.na(totalprecip_matrix)))
-range(which(is.na(pdsi_matrix)))
-
-colnames(no3_matrix)[1]; colnames(no3_matrix)[ncol(no3_matrix)]; ncol(no3_matrix)
-colnames(nadp_tin_n_matrix)[1]; colnames(nadp_tin_n_matrix)[ncol(nadp_tin_n_matrix)]; ncol(nadp_tin_n_matrix)
-colnames(bret_inorg_n_matrix)[1]; colnames(bret_inorg_n_matrix)[ncol(bret_inorg_n_matrix)]; ncol(bret_inorg_n_matrix)
-colnames(temp_matrix)[1]; colnames(temp_matrix)[ncol(temp_matrix)]; ncol(temp_matrix)
-colnames(totalprecip_matrix)[1]; colnames(totalprecip_matrix)[ncol(totalprecip_matrix)]; ncol(totalprecip_matrix)
-colnames(pdsi_matrix)[1]; colnames(pdsi_matrix)[ncol(pdsi_matrix)]; ncol(pdsi_matrix)
-
-
-ncol(no3_matrix); ncol(nadp_tin_n_matrix); ncol(bret_inorg_n_matrix); ncol(temp_matrix); ncol(totalprecip_matrix); ncol(pdsi_matrix)
 
 
 
+#edits based on 4/9 meeting -------------------------------------------------------------------
 
-
-
-#try a de-seasonalized and de-trended temperature anomaly 
+#try a de-seasonalized and de-trended temperature anomaly -----------
   #do we have to de-trend, or will marss take care of this?
 #check out forecast R package
 #iao: look into STL (seasonal trend decomposition using loess), should help detect anomalies in the timeseries after deseasonalizing/detrending
@@ -308,7 +296,7 @@ library(forecast)
 
 #shared temp across all sites -----
 
-temp_ts_mean <- colMeans(temp_matrix, na.rm = TRUE)
+temp_ts_mean <- colMeans(monthly_temp_matrix, na.rm = TRUE)
 temp_ts_mean <- ts(temp_ts_mean, frequency = 12, start = c(1981, 1))
 
 # STL decomposition
@@ -323,13 +311,13 @@ temp_anomaly_shared <- t(matrix(as.numeric(anomaly_shared_stl), ncol = 1))
 
 
 #site-specific temp -----
-n_time <- ncol(temp_matrix)
+n_time <- ncol(monthly_temp_matrix)
 
-temp_anomaly_bysite <- matrix(NA, nrow = nrow(temp_matrix), ncol = n_time)
-fitted_bysite  <- matrix(NA, nrow = nrow(temp_matrix), ncol = n_time)
+temp_anomaly_bysite <- matrix(NA, nrow = nrow(monthly_temp_matrix), ncol = n_time)
+fitted_bysite  <- matrix(NA, nrow = nrow(monthly_temp_matrix), ncol = n_time)
 
-for (i in seq_len(nrow(temp_matrix))) {
-    y <- ts(temp_matrix[i, ], frequency = 12, start = c(1981, 1))
+for (i in seq_len(nrow(monthly_temp_matrix))) {
+    y <- ts(monthly_temp_matrix[i, ], frequency = 12, start = c(1981, 1))
     stl_fit <- stl(y, s.window = "periodic")
   #save trend+ seasonal, and also remainder. use remainder as marss input
       fitted_bysite[i, ]  <- stl_fit$time.series[, "trend"] +
@@ -338,8 +326,8 @@ for (i in seq_len(nrow(temp_matrix))) {
 }
 
 #plot
-stl_list <- lapply(seq_len(nrow(temp_matrix)), function(i) {
-  ts_i <- ts(temp_matrix[i, ], frequency = 12, start = c(1981, 1))
+stl_list <- lapply(seq_len(nrow(monthly_temp_matrix)), function(i) {
+  ts_i <- ts(monthly_temp_matrix[i, ], frequency = 12, start = c(1981, 1))
   stl(ts_i, s.window = "periodic")})
 
 plot(stl_list[[1]])  #there's really only 2 versions (not 8) since there's just 2 gridmet cells
@@ -350,13 +338,390 @@ plot(stl_list[[8]])
 str(temp_anomaly_shared)
 str(temp_anomaly_bysite)
 
-colnames(temp_anomaly_shared) <- colnames(temp_matrix) 
+colnames(temp_anomaly_shared) <- colnames(monthly_temp_matrix) 
 
-colnames(temp_anomaly_bysite) <- colnames(temp_matrix) 
-rownames(temp_anomaly_bysite) <- rownames(temp_matrix)
-ncol(temp_matrix)
+colnames(temp_anomaly_bysite) <- colnames(monthly_temp_matrix) 
+rownames(temp_anomaly_bysite) <- rownames(monthly_temp_matrix)
+ncol(monthly_temp_matrix)
 ncol(temp_anomaly_shared)
 ncol(temp_anomaly_bysite)
+
+#make a daily anomaly version
+
+# shared 
+temp_ts_mean_daily <- colMeans(daily_temp_matrix, na.rm = TRUE)
+
+temp_ts_mean_daily <- ts(
+  temp_ts_mean_daily,
+  frequency = 365,
+  start = c(1981, 1))
+
+
+stl_mean_daily <- stl(temp_ts_mean_daily, s.window = "periodic")
+
+anomaly_shared_stl_daily <- stl_mean_daily$time.series[, "remainder"]
+
+temp_anomaly_shared_daily <- t(matrix(
+  as.numeric(anomaly_shared_stl_daily),
+  ncol = 1))
+
+plot(stl_mean_daily)
+str(temp_anomaly_shared_daily)
+
+#site specific
+n_time <- ncol(daily_temp_matrix)
+
+temp_anomaly_bysite_daily <- matrix(NA, nrow = nrow(daily_temp_matrix), ncol = n_time)
+fitted_bysite_daily <- matrix(NA, nrow = nrow(daily_temp_matrix), ncol = n_time)
+
+for (i in seq_len(nrow(daily_temp_matrix))) {
+  
+  y <- ts(daily_temp_matrix[i, ],
+          frequency = 365,
+          start = c(1981, 1))
+  
+  stl_fit <- stl(y, s.window = "periodic")
+  
+  fitted_bysite_daily[i, ] <-
+    stl_fit$time.series[, "trend"] +
+    stl_fit$time.series[, "seasonal"]
+  
+  temp_anomaly_bysite_daily[i, ] <-
+    stl_fit$time.series[, "remainder"]
+}
+
+stl_list_daily <- lapply(seq_len(nrow(daily_temp_matrix)), function(i) {
+  ts(daily_temp_matrix[i, ], frequency = 365, start = c(1981, 1)) %>%
+    stl(s.window = "periodic")
+})
+
+plot(stl_list_daily[[1]])
+plot(stl_list_daily[[8]])
+str(temp_anomaly_bysite_daily)
+
+
+colnames(temp_anomaly_shared_daily) <- colnames(daily_temp_matrix) 
+
+colnames(temp_anomaly_bysite_daily) <- colnames(daily_temp_matrix) 
+rownames(temp_anomaly_bysite_daily) <- rownames(daily_temp_matrix)
+ncol(daily_temp_matrix)
+ncol(temp_anomaly_shared_daily)
+ncol(temp_anomaly_bysite_daily)
+
+# cumulative flow as a covariate--------------------------------------------------------
+# cumulative flow on the DOY of a given sample, DOY starts oct 1
+# see script 01.1 lochO 
+#copied from 01.1 script:
+library(dataRetrieval)
+library(hydroTSM)
+      # Get data for LV
+      lv_no <- '401733105392404'
+      
+      # define parameters for discharge
+      params <- c('00060')
+      
+      
+      # get daily values from NWIS
+      LochQ <- readNWISdv(siteNumbers = lv_no, parameterCd = params,
+                          startDate = '1983-10-01', endDate = '2024-09-30')
+      
+      # rename columns using renameNWISColumns from package dataRetrieval
+      LochQ <- renameNWISColumns(LochQ)
+      
+      LochQ <- LochQ %>%
+        filter(Flow_cd=="A") %>%
+        rename(Q_cfs = Flow,
+               date= Date) %>%
+        mutate(Q_m3s = Q_cfs * 0.02831) %>%
+        select(date, Q_cfs, Q_m3s) %>%
+        mutate(waterYear = calcWaterYear(date))
+      
+      
+      # Look at the gaps in 2019, 2020
+      # LochQ %>%
+      #   filter(waterYear %in% c("2019","2020")) %>%
+      #   ggplot(aes(x=date, y=Q_m3s))+
+      #   geom_point()+
+      #   facet_wrap(~waterYear, scales="free_x")
+      # 
+      # Need to look at how many NAs, and make a decision about gap filling for next step
+      LochQ_tsbl <- as_tsibble(LochQ, key = waterYear) %>%
+        fill_gaps() %>% #adds ~400 missing days
+        mutate(Q_m3s = imputeTS::na_interpolation(Q_m3s, maxgap = 60))
+      
+      # Look at gaps in 2019, 2020 again
+      # LochQ_tsbl %>%
+      #   filter(waterYear %in% c("2019","2020")) %>%
+      #   ggplot(aes(x=date, y=Q_m3s))+
+      #   geom_point()+
+      #   facet_wrap(~waterYear, scales="free_x")
+      
+      # Anything weird in the rest of the data?
+      # LochQ_tsbl %>%
+      #   # filter(waterYear %in% c("2019","2020")) %>%
+      #   ggplot(aes(x=date, y=Q_m3s))+
+      #   geom_point()+
+      #   facet_wrap(~waterYear, scales="free_x")
+      # Nope, looks good
+      
+      # calculate cumulative discharge for each year by first grouping by water year,
+      # and then using the "cumsum" function. Add day of water year for plotting purposes.
+      
+      LochQ <- group_by(LochQ_tsbl, waterYear) %>%
+        mutate(cumulative_dis = cumsum(Q_m3s), 
+               wy_doy = hydro.day(date)) %>%
+        filter(!waterYear %in% c("1983","2024"))
+      
+      
+      percentile_days <- data.frame(LochQ_tsbl) %>%
+        arrange(waterYear, date) %>%
+        group_by(waterYear) %>%
+        mutate(
+          cumulative_dis = cumsum(Q_m3s),
+          total_flow = sum(Q_m3s),
+          frac_flow = cumulative_dis / total_flow
+        ) %>%
+        # For each threshold, find the first date
+        summarise(
+          day_20th = date[which.min(abs(frac_flow - 0.2))],
+          day_50th = date[which.min(abs(frac_flow - 0.5))],
+          day_80th = date[which.min(abs(frac_flow - 0.8))]
+        ) %>%
+        mutate(
+          day_20th_wydoy = hydro.day(day_20th),
+          day_50th_wydoy = hydro.day(day_50th),
+          day_80th_wydoy = hydro.day(day_80th)
+        )
+      
+      # # Check this works
+      # percentile_days %>%
+      #   ggplot(aes(x=waterYear, y=day_20th_wydoy))+
+      #   geom_point()
+      # 
+      # percentile_days %>%
+      #   ggplot(aes(x=waterYear, y=day_50th_wydoy))+
+      #   geom_point()
+      # 
+      # percentile_days %>%
+      #   ggplot(aes(x=waterYear, y=day_80th_wydoy))+
+      #   geom_point()
+      # 
+      # ## Plot all 
+      # percentile_days %>%
+      #   pivot_longer(day_20th_wydoy:day_80th_wydoy) %>%
+      #   ggplot(aes(x=waterYear, y=value, color=name))+
+      #   geom_point()+theme_bw()
+      
+      
+#turn it into a covariate matrix for marss
+all_dates <- data.frame(date = seq(as.Date("1984-01-01"), as.Date("2023-12-31"), by = "day"))
+all_dates <- all_dates %>%
+  mutate(waterYear = ifelse(format(date, "%m-%d") >= "10-01",
+                       as.numeric(format(date, "%Y")) + 1,
+                       as.numeric(format(date, "%Y"))))
+q50 <- all_dates %>%
+  left_join(percentile_days %>%
+              select(waterYear, day_50th), by = "waterYear")      
+q50 <- q50 %>%
+  mutate(day50_doy = as.numeric(date - day_50th))
+
+q50_matrix <- t(q50$day50_doy)
+colnames(q50_matrix) <- format(q50$date, "%Y-%m-%d")
+ncol(q50_matrix)
+ncol(daily_temp_matrix)
+
+colnames(q50_matrix)[1]
+colnames(q50_matrix)[ncol(q50_matrix)]
+colnames(daily_temp_matrix)[1]
+colnames(daily_temp_matrix)[ncol(daily_temp_matrix)]
+q50_matrix <- as.matrix(q50_matrix)
+
+
+#clip all to chem dataframe
+#what are all my matrices called
+ls()[sapply(ls(), function(x) is.matrix(get(x)))]
+
+#clipping params
+start_date <- as.Date("1984-01-01")
+end_date   <- as.Date("2023-12-31")
+
+monthly_no3_matrix <- monthly_no3_matrix[, as.Date(colnames(monthly_no3_matrix)) >= start_date & as.Date(colnames(monthly_no3_matrix)) <= end_date]
+daily_no3_matrix <- daily_no3_matrix[, as.Date(colnames(daily_no3_matrix)) >= start_date & as.Date(colnames(daily_no3_matrix)) <= end_date]
+
+nadp_tin_n_matrix <- nadp_tin_n_matrix[, as.Date(colnames(nadp_tin_n_matrix)) >= start_date & as.Date(colnames(nadp_tin_n_matrix)) <= end_date, drop=F]
+bret_inorg_n_matrix <- bret_inorg_n_matrix[, as.Date(colnames(bret_inorg_n_matrix)) >= start_date & as.Date(colnames(bret_inorg_n_matrix)) <= end_date, drop=F]
+
+monthly_temp_matrix <- monthly_temp_matrix[, as.Date(colnames(monthly_temp_matrix)) >= start_date & as.Date(colnames(monthly_temp_matrix)) <= end_date, drop=F]
+daily_temp_matrix <- daily_temp_matrix[, as.Date(colnames(daily_temp_matrix)) >= start_date & as.Date(colnames(daily_temp_matrix)) <= end_date, drop=F]
+temp_anomaly_bysite <- temp_anomaly_bysite[, as.Date(colnames(temp_anomaly_bysite)) >= start_date & as.Date(colnames(temp_anomaly_bysite)) <= end_date, drop=F]
+temp_anomaly_bysite_daily <- temp_anomaly_bysite_daily[, as.Date(colnames(temp_anomaly_bysite_daily)) >= start_date & as.Date(colnames(temp_anomaly_bysite_daily)) <= end_date, drop=F]
+
+totalprecip_matrix <- totalprecip_matrix[, as.Date(colnames(totalprecip_matrix)) >= start_date & as.Date(colnames(totalprecip_matrix)) <= end_date, drop=F ] 
+
+pdsi_matrix <- pdsi_matrix[, as.Date(colnames(pdsi_matrix)) >= start_date & as.Date(colnames(pdsi_matrix)) <= end_date, drop=F]
+
+q50_matrix <- q50_matrix[, as.Date(colnames(q50_matrix)) >= start_date & as.Date(colnames(q50_matrix)) <= end_date, drop=F ]
+
+
+#fill in date gaps
+all_days   <- seq(as.Date("1984-01-01"), as.Date("2023-12-31"), by = "day")
+all_months <- seq(as.Date("1984-01-01"), as.Date("2023-12-01"), by = "month")
+
+#monthly data
+monthly_no3_matrix <- monthly_no3_matrix[, match(all_months, as.Date(colnames(monthly_no3_matrix))), drop=F]
+nadp_tin_n_matrix <- nadp_tin_n_matrix[, match(all_months, as.Date(colnames(nadp_tin_n_matrix))), drop=F]
+bret_inorg_n_matrix <- bret_inorg_n_matrix[, match(all_months, as.Date(colnames(bret_inorg_n_matrix))), drop=F]
+monthly_temp_matrix <- monthly_temp_matrix[, match(all_months, as.Date(colnames(monthly_temp_matrix))), drop=F]
+totalprecip_matrix <- totalprecip_matrix[, match(all_months, as.Date(colnames(totalprecip_matrix))), drop=F]
+pdsi_matrix <- pdsi_matrix[, match(all_months, as.Date(colnames(pdsi_matrix))), drop=F]
+temp_anomaly_bysite <- temp_anomaly_bysite[, match(all_months, as.Date(colnames(temp_anomaly_bysite))), drop=F]
+
+#daily data
+daily_no3_matrix <- daily_no3_matrix[, match(all_days, as.Date(colnames(daily_no3_matrix))), drop=F]
+daily_temp_matrix <- daily_temp_matrix[, match(all_days, as.Date(colnames(daily_temp_matrix))), drop=F]
+temp_anomaly_bysite_daily <- temp_anomaly_bysite_daily[, match(all_days, as.Date(colnames(temp_anomaly_bysite_daily))), drop=F]
+q50_matrix <- q50_matrix[, match(all_days, as.Date(colnames(q50_matrix))), drop=F]
+
+#gap fill NA dates
+matrix_date_fill <- function(mat, full_dates) {
+  idx <- match(full_dates, as.Date(colnames(mat)))
+  mat <- mat[, idx, drop = FALSE]
+  colnames(mat) <- as.character(full_dates)
+  return(mat)
+}
+
+#monthly
+monthly_no3_matrix      <- matrix_date_fill(monthly_no3_matrix, all_months)
+nadp_tin_n_matrix      <- matrix_date_fill(nadp_tin_n_matrix, all_months)
+bret_inorg_n_matrix     <- matrix_date_fill(bret_inorg_n_matrix, all_months)
+monthly_temp_matrix     <- matrix_date_fill(monthly_temp_matrix, all_months)
+totalprecip_matrix     <- matrix_date_fill(totalprecip_matrix, all_months)
+pdsi_matrix     <- matrix_date_fill(pdsi_matrix, all_months)
+temp_anomaly_bysite     <- matrix_date_fill(temp_anomaly_bysite, all_months)
+
+#daily
+daily_no3_matrix        <- matrix_date_fill(daily_no3_matrix, all_days)
+daily_temp_matrix       <- matrix_date_fill(daily_temp_matrix, all_days)
+temp_anomaly_bysite_daily       <- matrix_date_fill(temp_anomaly_bysite_daily, all_days)
+q50_matrix       <- matrix_date_fill(q50_matrix, all_days)
+
+# check
+ncol(monthly_no3_matrix); ncol(nadp_tin_n_matrix); ncol(bret_inorg_n_matrix); ncol(monthly_temp_matrix); ncol(temp_anomaly_bysite); ncol(totalprecip_matrix); ncol(pdsi_matrix)
+ncol(daily_no3_matrix); ncol(daily_temp_matrix); ncol(q50_matrix); ncol(temp_anomaly_bysite_daily)
+
+
+
+
+
+# are there NAs in each covariate? should be Inf -Inf if no NA's (clunky but couldnt think of something slicker atm...)
+range(which(is.na(nadp_tin_n_matrix)))
+range(which(is.na(bret_inorg_n_matrix))) #this has NAs
+range(which(is.na(monthly_temp_matrix)))
+range(which(is.na(totalprecip_matrix)))
+range(which(is.na(pdsi_matrix)))
+range(which(is.na(daily_temp_matrix)))
+range(which(is.na(temp_anomaly_bysite)))
+range(which(is.na(temp_anomaly_bysite_daily)))
+range(which(is.na(q50_matrix)))
+
+
+
+colnames(monthly_no3_matrix)[1]; colnames(monthly_no3_matrix)[ncol(monthly_no3_matrix)]; ncol(monthly_no3_matrix)
+colnames(nadp_tin_n_matrix)[1]; colnames(nadp_tin_n_matrix)[ncol(nadp_tin_n_matrix)]; ncol(nadp_tin_n_matrix)
+colnames(bret_inorg_n_matrix)[1]; colnames(bret_inorg_n_matrix)[ncol(bret_inorg_n_matrix)]; ncol(bret_inorg_n_matrix)
+colnames(monthly_temp_matrix)[1]; colnames(monthly_temp_matrix)[ncol(monthly_temp_matrix)]; ncol(monthly_temp_matrix)
+colnames(totalprecip_matrix)[1]; colnames(totalprecip_matrix)[ncol(totalprecip_matrix)]; ncol(totalprecip_matrix)
+colnames(pdsi_matrix)[1]; colnames(pdsi_matrix)[ncol(pdsi_matrix)]; ncol(pdsi_matrix)
+colnames(temp_anomaly_bysite)[1]; colnames(temp_anomaly_bysite)[ncol(temp_anomaly_bysite)]; ncol(temp_anomaly_bysite)
+
+colnames(daily_no3_matrix)[1]; colnames(daily_no3_matrix)[ncol(daily_no3_matrix)]; ncol(daily_no3_matrix)
+colnames(temp_anomaly_bysite_daily)[1]; colnames(temp_anomaly_bysite_daily)[ncol(temp_anomaly_bysite_daily)]; ncol(temp_anomaly_bysite_daily)
+colnames(q50_matrix)[1]; colnames(q50_matrix)[ncol(q50_matrix)]; ncol(q50_matrix)
+colnames(daily_temp_matrix)[1]; colnames(daily_temp_matrix)[ncol(daily_temp_matrix)]; ncol(daily_temp_matrix)
+
+
+# clip all the matrices to just the open water season ----------------------------------------
+#standardize the colnames
+colnames(bret_inorg_n_matrix)<-as.character(as.Date(colnames(bret_inorg_n_matrix)))
+colnames(daily_no3_matrix)<-as.character(as.Date(colnames(daily_no3_matrix)))
+colnames(daily_temp_matrix)<-as.character(as.Date(colnames(daily_temp_matrix)))
+colnames(monthly_no3_matrix)<-as.character(as.Date(colnames(monthly_no3_matrix)))
+colnames(monthly_temp_matrix)<-as.character(as.Date(colnames(monthly_temp_matrix)))
+colnames(nadp_tin_n_matrix)<-as.character(as.Date(colnames(nadp_tin_n_matrix)))
+colnames(pdsi_matrix)<-as.character(as.Date(colnames(pdsi_matrix)))
+colnames(q50_matrix)<-as.character(as.Date(colnames(q50_matrix)))
+colnames(temp_anomaly_bysite)<-as.character(as.Date(colnames(temp_anomaly_bysite)))
+colnames(temp_anomaly_bysite_daily)<-as.character(as.Date(colnames(temp_anomaly_bysite_daily)))
+colnames(totalprecip_matrix)<-as.character(as.Date(colnames(totalprecip_matrix)))
+
+start_openwater <- "06-01"
+end_openwater   <- "10-01"
+
+monthly_no3_matrix <- monthly_no3_matrix[, format(as.Date(colnames(monthly_no3_matrix)), "%m-%d") >= start_openwater &
+                                           format(as.Date(colnames(monthly_no3_matrix)), "%m-%d") <= end_openwater, drop = FALSE]
+
+daily_no3_matrix <- daily_no3_matrix[, format(as.Date(colnames(daily_no3_matrix)), "%m-%d") >= start_openwater &
+                                       format(as.Date(colnames(daily_no3_matrix)), "%m-%d") <= end_openwater, drop = FALSE]
+
+nadp_tin_n_matrix <- nadp_tin_n_matrix[, format(as.Date(colnames(nadp_tin_n_matrix)), "%m-%d") >= start_openwater &
+                                         format(as.Date(colnames(nadp_tin_n_matrix)), "%m-%d") <= end_openwater, drop = FALSE]
+
+bret_inorg_n_matrix <- bret_inorg_n_matrix[, format(as.Date(colnames(bret_inorg_n_matrix)), "%m-%d") >= start_openwater &
+                                             format(as.Date(colnames(bret_inorg_n_matrix)), "%m-%d") <= end_openwater, drop = FALSE]
+
+monthly_temp_matrix <- monthly_temp_matrix[, format(as.Date(colnames(monthly_temp_matrix)), "%m-%d") >= start_openwater &
+                                             format(as.Date(colnames(monthly_temp_matrix)), "%m-%d") <= end_openwater, drop = FALSE]
+
+daily_temp_matrix <- daily_temp_matrix[, format(as.Date(colnames(daily_temp_matrix)), "%m-%d") >= start_openwater &
+                                         format(as.Date(colnames(daily_temp_matrix)), "%m-%d") <= end_openwater, drop = FALSE]
+
+temp_anomaly_bysite <- temp_anomaly_bysite[, format(as.Date(colnames(temp_anomaly_bysite)), "%m-%d") >= start_openwater &
+                                             format(as.Date(colnames(temp_anomaly_bysite)), "%m-%d") <= end_openwater, drop = FALSE]
+
+temp_anomaly_bysite_daily <- temp_anomaly_bysite_daily[, format(as.Date(colnames(temp_anomaly_bysite_daily)), "%m-%d") >= start_openwater &
+                                                         format(as.Date(colnames(temp_anomaly_bysite_daily)), "%m-%d") <= end_openwater, drop = FALSE]
+
+totalprecip_matrix <- totalprecip_matrix[, format(as.Date(colnames(totalprecip_matrix)), "%m-%d") >= start_openwater &
+                                           format(as.Date(colnames(totalprecip_matrix)), "%m-%d") <= end_openwater, drop = FALSE]
+
+pdsi_matrix <- pdsi_matrix[, format(as.Date(colnames(pdsi_matrix)), "%m-%d") >= start_openwater &
+                             format(as.Date(colnames(pdsi_matrix)), "%m-%d") <= end_openwater, drop = FALSE]
+
+q50_matrix <- q50_matrix[, format(as.Date(colnames(q50_matrix)), "%m-%d") >= start_openwater &
+                           format(as.Date(colnames(q50_matrix)), "%m-%d") <= end_openwater, drop = FALSE]
+
+#take out sky in_s ------------------------------------------------------------------------
+bret_inorg_n_matrix <- bret_inorg_n_matrix[rownames(bret_inorg_n_matrix) != "sky_in_s", , drop = FALSE]
+daily_no3_matrix <- daily_no3_matrix[rownames(daily_no3_matrix) != "sky_in_s", , drop = FALSE]
+daily_temp_matrix <- daily_temp_matrix[rownames(daily_temp_matrix) != "sky_in_s", , drop = FALSE]
+monthly_no3_matrix <- monthly_no3_matrix[rownames(monthly_no3_matrix) != "sky_in_s", , drop = FALSE]
+monthly_temp_matrix <- monthly_temp_matrix[rownames(monthly_temp_matrix) != "sky_in_s", , drop = FALSE]
+nadp_tin_n_matrix <- nadp_tin_n_matrix[rownames(nadp_tin_n_matrix) != "sky_in_s", , drop = FALSE]
+pdsi_matrix <- pdsi_matrix[rownames(pdsi_matrix) != "sky_in_s", , drop = FALSE]
+temp_anomaly_bysite <- temp_anomaly_bysite[rownames(temp_anomaly_bysite) != "sky_in_s", , drop = FALSE]
+totalprecip_matrix <- totalprecip_matrix[rownames(totalprecip_matrix) != "sky_in_s", , drop = FALSE]
+
+
+
+# are there NAs in each covariate? should be Inf -Inf if no NA's (clunky but couldnt think of something slicker atm...)
+range(which(is.na(nadp_tin_n_matrix)))
+range(which(is.na(bret_inorg_n_matrix))) #this has NAs
+range(which(is.na(monthly_temp_matrix)))
+range(which(is.na(totalprecip_matrix)))
+range(which(is.na(pdsi_matrix)))
+range(which(is.na(daily_temp_matrix)))
+range(which(is.na(temp_anomaly_bysite)))
+range(which(is.na(temp_anomaly_bysite_daily)))
+range(which(is.na(q50_matrix)))
+
+
+
+
+
+
+
+
+
 
 
 #save all the matrices as ts_matrices.rdata file for easy loading into the marss script
@@ -364,10 +729,12 @@ ncol(temp_anomaly_bysite)
 save(
   bret_inorg_n_matrix,
   nadp_tin_n_matrix,
-  no3_matrix,
+  monthly_no3_matrix,
+  daily_no3_matrix,
   pdsi_matrix,
-  temp_matrix,
+  daily_temp_matrix,
+  monthly_temp_matrix,
   temp_anomaly_bysite,
-  temp_anomaly_shared,
   totalprecip_matrix,
+  q50_matrix,
   file = "data/mj_aslo/ts_matrices.RData")

@@ -2,7 +2,7 @@
 ########################################################################################################################################################################################
 #Description: This script runs multivariate state-space models on mean monthly nitrate over x years
 #in x streams and lakes within the Loch Vale Watershed. Goal is to quantify relationships with covariates (drivers),
-#including air temp, precip, and deposition, and determine the spatial structure of those relationships (if any).
+#including climate and deposition, and determine the spatial structure of those relationships (if any).
 
 #adapted from adrianne/mj smoke marss code
 ############################################################################################################################################################################################

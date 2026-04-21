@@ -4,7 +4,7 @@ load('data/mj_aslo/LVWS_output_04172026.Rdata')
 
 names(mod.output)
 
-mod.to.analyze <- mod.output[[24]]
+mod.to.analyze <- mod.output[[24]] 
 
 #extract marss state estimates------------------------------------------------------------------------------
 xhat <- mod.to.analyze$states  

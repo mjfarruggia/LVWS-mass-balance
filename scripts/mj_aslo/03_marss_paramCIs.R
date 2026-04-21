@@ -2,12 +2,12 @@
 library(MARSS)
 
 
-load('Data/marss/LVWS_output_04082026.Rdata')
+load('data/mj_aslo/LVWS_output_04172026.Rdata')
 
 
 names(mod.output)
 
-mod.to.analyze = mod.output[20]
+mod.to.analyze = mod.output[24]
 
 marss_mle_obj = mod.to.analyze$mod
 
@@ -96,21 +96,12 @@ extract_C <- function(mod_name) {
   C_est <- C_est[grepl("^C\\.", names(C_est))]
   if(length(C_est) == 0) return(NULL)
   
-  df <- data.frame(
-    param    = names(C_est),
-    estimate = as.numeric(C_est),
-    model    = mod_name,
-    stringsAsFactors = FALSE
-  )
+  df <- data.frame(param = names(C_est),estimate = as.numeric(C_est),model= mod_name, stringsAsFactors = FALSE)
   
   df %>%
-    mutate(
-      n_dots        = stringr::str_count(param, "\\."),
+    mutate(n_dots = stringr::str_count(param, "\\."),
       covariate_row = sub("^C\\.([^.]+)\\..*", "\\1", param),
-      site          = ifelse(n_dots >= 2,
-                             sub("^C\\.[^.]+\\.", "", param),
-                             "all sites")
-    ) %>%
+      site = ifelse(n_dots >= 2,sub("^C\\.[^.]+\\.", "", param),"all sites")) %>%
     select(-n_dots)
 }
 
@@ -121,8 +112,7 @@ C_all <- map_dfr(top6$model, extract_C) %>%
     model_label = paste0(model, "\nΔAICc=", round(delta_AICc, 1)),
     model_label = factor(model_label, levels = unique(model_label)),
     site = factor(site, levels = c("sky_in_n","sky_in_s","sky_ls","sky_out",
-                                   "andrews","loch_in","loch_ls","loch_out"))
-  )
+                                   "andrews","loch_in","loch_ls","loch_out")))
 
 # plot
 ggplot(C_all, aes(y = site, x = estimate, color = covariate_row)) +
@@ -130,10 +120,6 @@ ggplot(C_all, aes(y = site, x = estimate, color = covariate_row)) +
   geom_segment(aes(y = site, yend = site, x = 0, xend = estimate, color = covariate_row)) +
   geom_vline(xintercept = 0, linetype = "dashed", color = "gray40") +
   facet_wrap(~model_label, ncol = 2, scales = "free_x") +
-  labs(
-    y = "Site", x = "effect est"  ) +
+  labs(y = "Site", x = "effect est") +
   theme_bw() +
-  theme(
-    strip.text = element_text(size = 8),
-    legend.position = "bottom"
-  )
+  theme(strip.text = element_text(size = 8),legend.position = "bottom")

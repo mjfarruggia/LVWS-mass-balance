@@ -735,6 +735,7 @@ save(
   daily_temp_matrix,
   monthly_temp_matrix,
   temp_anomaly_bysite,
+  temp_anomaly_bysite_daily,
   totalprecip_matrix,
   q50_matrix,
   file = "data/mj_aslo/ts_matrices.RData")

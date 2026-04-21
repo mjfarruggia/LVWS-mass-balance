@@ -413,7 +413,6 @@ ncol(temp_anomaly_bysite_daily)
 # see script 01.1 lochO 
 #copied from 01.1 script:
 library(dataRetrieval)
-library(hydroTSM)
       # Get data for LV
       lv_no <- '401733105392404'
       
@@ -739,3 +738,19 @@ save(
   totalprecip_matrix,
   q50_matrix,
   file = "data/mj_aslo/ts_matrices.RData")
+
+
+
+#save data frames for gams 
+save(
+  lv_wide,
+  bret_inorg_N,
+  nadp_wetdep,
+  monthly_climate,
+  daily_climate,
+  temp_anomaly_shared,
+  temp_anomaly_bysite,
+  temp_anomaly_shared_daily,
+  q50,
+  file = "data/mj_aslo/ts_dfs.RData")
+

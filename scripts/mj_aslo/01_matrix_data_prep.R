@@ -689,16 +689,16 @@ pdsi_matrix <- pdsi_matrix[, format(as.Date(colnames(pdsi_matrix)), "%m-%d") >= 
 q50_matrix <- q50_matrix[, format(as.Date(colnames(q50_matrix)), "%m-%d") >= start_openwater &
                            format(as.Date(colnames(q50_matrix)), "%m-%d") <= end_openwater, drop = FALSE]
 
-#take out sky in_s ------------------------------------------------------------------------
-bret_inorg_n_matrix <- bret_inorg_n_matrix[rownames(bret_inorg_n_matrix) != "sky_in_s", , drop = FALSE]
-daily_no3_matrix <- daily_no3_matrix[rownames(daily_no3_matrix) != "sky_in_s", , drop = FALSE]
-daily_temp_matrix <- daily_temp_matrix[rownames(daily_temp_matrix) != "sky_in_s", , drop = FALSE]
-monthly_no3_matrix <- monthly_no3_matrix[rownames(monthly_no3_matrix) != "sky_in_s", , drop = FALSE]
-monthly_temp_matrix <- monthly_temp_matrix[rownames(monthly_temp_matrix) != "sky_in_s", , drop = FALSE]
-nadp_tin_n_matrix <- nadp_tin_n_matrix[rownames(nadp_tin_n_matrix) != "sky_in_s", , drop = FALSE]
-pdsi_matrix <- pdsi_matrix[rownames(pdsi_matrix) != "sky_in_s", , drop = FALSE]
-temp_anomaly_bysite <- temp_anomaly_bysite[rownames(temp_anomaly_bysite) != "sky_in_s", , drop = FALSE]
-totalprecip_matrix <- totalprecip_matrix[rownames(totalprecip_matrix) != "sky_in_s", , drop = FALSE]
+#take out sky in_n ------------------------------------------------------------------------
+bret_inorg_n_matrix <- bret_inorg_n_matrix[rownames(bret_inorg_n_matrix) != "sky_in_n", , drop = FALSE]
+daily_no3_matrix <- daily_no3_matrix[rownames(daily_no3_matrix) != "sky_in_n", , drop = FALSE]
+daily_temp_matrix <- daily_temp_matrix[rownames(daily_temp_matrix) != "sky_in_n", , drop = FALSE]
+monthly_no3_matrix <- monthly_no3_matrix[rownames(monthly_no3_matrix) != "sky_in_n", , drop = FALSE]
+monthly_temp_matrix <- monthly_temp_matrix[rownames(monthly_temp_matrix) != "sky_in_n", , drop = FALSE]
+nadp_tin_n_matrix <- nadp_tin_n_matrix[rownames(nadp_tin_n_matrix) != "sky_in_n", , drop = FALSE]
+pdsi_matrix <- pdsi_matrix[rownames(pdsi_matrix) != "sky_in_n", , drop = FALSE]
+temp_anomaly_bysite <- temp_anomaly_bysite[rownames(temp_anomaly_bysite) != "sky_in_n", , drop = FALSE]
+totalprecip_matrix <- totalprecip_matrix[rownames(totalprecip_matrix) != "sky_in_n", , drop = FALSE]
 
 
 

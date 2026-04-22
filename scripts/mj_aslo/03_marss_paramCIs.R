@@ -12,7 +12,7 @@ mod.to.analyze = mod.output[24]
 marss_mle_obj = mod.to.analyze$mod
 
 # output with error estimates around model parameters
-paramCI <- MARSSparamCIs(marss_mle_obj, method = 'parametric')
+paramCI <- MARSSparamCIs(marss_mle_obj, method = 'parametric', nboot=100) #currently 100, change for final
 
 print(paramCI)
 
@@ -43,7 +43,7 @@ AIC_value <- paramCI$AIC
 AICc_value <- paramCI$AICc
 
 # Store in dataframe
-paramCI_df_20 <- data.frame(
+paramCI_df_24 <- data.frame(
   Parameter = param_names,
   ML.Estimate = ML_estimate,
   Std.Err = Std_Err,
@@ -55,10 +55,20 @@ paramCI_df_20 <- data.frame(
   AICc = AICc_value
 )
 
-paramCI_df_20
-paramCI_df_20$Model= names(mod.output[20])
+paramCI_df_24
+paramCI_df_24$Model= names(mod.output[24])
 
-paramCI_df <- paramCI_df_20
+paramCI_df <- paramCI_df_24
+
+
+
+
+
+#plot effects with ci's 
+
+
+
+
 
 
 

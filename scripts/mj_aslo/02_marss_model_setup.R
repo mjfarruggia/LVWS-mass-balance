@@ -233,21 +233,21 @@ C_7.2_sep <- matrix(list('tin.sky_in_s','tin.sky_ls','tin.sky_out',
 
 # 3: Temp anomaly (2 rows: temp_upper = sky+andrews [col1], temp_lower = loch [col2])
 C_7.3_sh  <- matrix(list('temp_upper','temp_upper','temp_upper','temp_upper',0,0,0,
-                         0,0,0,0,0,'temp_lower','temp_lower','temp_lower'), nsites, 2)
+                         0,0,0,0,'temp_lower','temp_lower','temp_lower'), nsites, 2)
 C_7.3_sep <- matrix(list('temp_upper.sky_in_s','temp_upper.sky_ls','temp_upper.sky_out','temp_upper.andrews',0,0,0,
-                         0,0,0,0,0,'temp_lower.loch_in','temp_lower.loch_ls','temp_lower.loch_out'), nsites, 2)
+                         0,0,0,0,'temp_lower.loch_in','temp_lower.loch_ls','temp_lower.loch_out'), nsites, 2)
 
 # 4: Precip (2 rows: precip_upper = sky+andrews [col1], precip_lower = loch [col2])
 C_7.4_sh  <- matrix(list('precip_upper','precip_upper','precip_upper','precip_upper',0,0,0,
-                         0,0,0,0,0,'precip_lower','precip_lower','precip_lower'), nsites, 2)
+                         0,0,0,0,'precip_lower','precip_lower','precip_lower'), nsites, 2)
 C_7.4_sep <- matrix(list('precip_upper.sky_in_s','precip_upper.sky_ls','precip_upper.sky_out','precip_upper.andrews',0,0,0,
-                         0,0,0,0,0,'precip_lower.loch_in','precip_lower.loch_ls','precip_lower.loch_out'), nsites, 2)
+                         0,0,0,0,'precip_lower.loch_in','precip_lower.loch_ls','precip_lower.loch_out'), nsites, 2)
 
 # 5: PDSI (2 rows: pdsi_upper = sky+andrews [col1], pdsi_lower = loch [col2])
 C_7.5_sh  <- matrix(list('pdsi_upper','pdsi_upper','pdsi_upper','pdsi_upper',0,0,0,
-                         0,0,0,0,0,'pdsi_lower','pdsi_lower','pdsi_lower'), nsites, 2)
+                         0,0,0,0,'pdsi_lower','pdsi_lower','pdsi_lower'), nsites, 2)
 C_7.5_sep <- matrix(list('pdsi_upper.sky_in_s','pdsi_upper.sky_ls','pdsi_upper.sky_out','pdsi_upper.andrews',0,0,0,
-                         0,0,0,0,0,'pdsi_lower.loch_in','pdsi_lower.loch_ls','pdsi_lower.loch_out'), nsites, 2)
+                         0,0,0,0,'pdsi_lower.loch_in','pdsi_lower.loch_ls','pdsi_lower.loch_out'), nsites, 2)
 
 
 C.list <- list(C_7.1, C_7.2_sh, C_7.2_sep, C_7.3_sh, C_7.3_sep,C_7.4_sh, C_7.4_sep,C_7.5_sh, C_7.5_sep)

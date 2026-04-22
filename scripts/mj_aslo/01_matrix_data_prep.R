@@ -750,6 +750,7 @@ save(
   daily_climate,
   temp_anomaly_shared,
   temp_anomaly_bysite,
+  temp_anomaly_bysite_daily,
   temp_anomaly_shared_daily,
   q50,
   file = "data/mj_aslo/ts_dfs.RData")

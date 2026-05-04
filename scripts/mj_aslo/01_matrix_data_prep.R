@@ -210,23 +210,82 @@ bret_inorg_n_matrix <- bret_inorg_N %>%
 
 
 #NADP deposition as another option
-base::load("data/mj_aslo/nadp.RData") 
+# base::load("data/mj_aslo/nadp.RData") #this is my gridmet derived variable from concentrations; seems to underestimate when compared to CO98 station deposition
+# 
+# nadp_plot <- nadp_wetdep %>%
+#   mutate(date = as.Date(paste(year, month, "01", sep = "-")))%>%
+#   filter(lake_ID %in% c("LOCH", "SKY"))
+# ggplot(nadp_plot, aes(x = date, y = TIN_N_kg_ha, color = lake_ID)) +
+#   geom_line() +
+#   geom_point(size = 0.6) +
+#   labs(
+#     x = "Date",
+#     y = "TIN (kg N/ha)",
+#     color = "Lake ID"
+#   ) +
+#   theme_minimal()
+# 
+# sites <- tibble(
+#   site = c("sky_in_n", "sky_in_s", "sky_ls", "sky_out","andrewscreek_shr", "loch_in", "loch_ls", "loch_out"),
+#   lake_site = c("sky", "sky", "sky", "sky", "andrewscreek", "loch", "loch", "loch"))
+# 
+# nadp_tin_n_matrix <- sites %>%
+#   left_join(nadp_wetdep %>%
+#       mutate(lake_site = tolower(lake_ID),
+#              date = as.Date(paste(year, month, "01", sep = "-"))) %>%
+#       select(lake_site, date, TIN_N_kg_ha),by = "lake_site") %>%
+#   select(site, date, TIN_N_kg_ha) %>%
+#   pivot_wider(names_from = date, values_from = TIN_N_kg_ha) %>%
+#   column_to_rownames("site") %>%
+#   as.matrix()
+
+#try using just the loch vale deposition estimates from CO98
+ # co98 <- read.csv("data/mj_aslo/NTN-co98-m-s-kg_no_incompletes.csv")#downloaded without option "show incomplete data"
+  co98 <- read.csv("data/mj_aslo/NTN-co98-m-i-kg.csv") #downloaded with option "show incomplete data"
+
+#-9 is an error code, remove rows with -9's. 
+co98 <- co98[ rowSums(co98[, c("Ca", "Mg", "K", "Na", "NH4", "NO3", "totalN", "Cl", "SO4")] < 0) == 0, ]
+
+co98 <- co98 %>%
+  mutate(date = ymd(paste(yr, seas, "01", sep = "-")))
+
+#interpolate missing months
+co98_interpolated <- co98 %>%
+  complete(date = seq(min(date), max(date), by = "month")) %>%
+  ungroup()
+
+co98_interpolated <- co98_interpolated %>%
+  mutate(across(where(is.numeric), ~ na.approx(.x, date, na.rm = FALSE))) %>% #na.approx is linear interpolation
+  ungroup()
+
+co98_interpolated %>%
+  ggplot(aes(x = date, y = totalN)) +
+  geom_point() +
+  theme_bw()
 
 
-sites <- tibble(
-  site = c("sky_in_n", "sky_in_s", "sky_ls", "sky_out","andrewscreek_shr", "loch_in", "loch_ls", "loch_out"),
-  lake_site = c("sky", "sky", "sky", "sky", "andrewscreek", "loch", "loch", "loch"))
+nadp_totalN_matrix <- co98_interpolated %>%
+     select(date, totalN) %>%
+    pivot_wider(names_from = date, values_from = totalN) %>%
+    as.matrix()
 
-nadp_tin_n_matrix <- sites %>%
-  left_join(nadp_wetdep %>%
-      mutate(lake_site = tolower(lake_ID),
-             date = as.Date(paste(year, month, "01", sep = "-"))) %>%
-      select(lake_site, date, TIN_N_kg_ha),by = "lake_site") %>%
-  select(site, date, TIN_N_kg_ha) %>%
-  pivot_wider(names_from = date, values_from = TIN_N_kg_ha) %>%
-  column_to_rownames("site") %>%
-  as.matrix()
 
+#plot annual totals
+annual_totalN <- co98_interpolated %>%
+  group_by(yr) %>%
+  summarise(
+    totalN_annual = sum(totalN, na.rm = TRUE),
+    .groups = "drop"
+  )
+ggplot(annual_totalN, aes(x = yr, y = totalN_annual)) +
+  geom_line() +
+  geom_point() +
+  labs(
+    x = "Year",
+    y = "Annual Total N",
+    title = "Annual Total Nitrogen (CO98)"
+  ) +
+  theme_minimal()
 
 #climate marss matrices---------------------------------------------------------------------
 

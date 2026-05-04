@@ -50,7 +50,7 @@ base::load("data/mj_aslo/nadp.RData")
 lv <- read.csv("data/mj_aslo/LV_chemistry.csv")
 unique(lv$sampleLocation)
 
-#keep: sample_type=norm,  sampleLocation = "ls" or "shr" or "out" or "in" or "in_s" or "in_n", sample rep =1
+#keep: sample_type=norm,  sampleLocation = "ls" or "shr" or "out" or "in" or "in_n", sample rep =1
 #also keep summer only here
 lv_filtered <- lv %>%
   filter(
@@ -252,12 +252,12 @@ nitrate_models <- list(
   pdsi                          = NO3_mgL ~ s(pdsi),
   pdsi_wetdep                   = NO3_mgL ~ s(pdsi) + s(TIN_N_kg_ha),
   
-  # q50                           = NO3_mgL ~ s(day50_doy),
-  # q50_temp                      = NO3_mgL ~ s(day50_doy) + s(temp_anomaly),
-  # q50_wetdep                    = NO3_mgL ~ s(day50_doy) + s(TIN_N_kg_ha),
-  # q50_temp_wetdep               = NO3_mgL ~ s(day50_doy) + s(temp_anomaly) + s(TIN_N_kg_ha),
-  # q50_WYprecip                  = NO3_mgL ~ s(day50_doy) + s(WY_total_precip),
-  # q50_WYprecip_wetdep           = NO3_mgL ~ s(day50_doy) + s(WY_total_precip) + s(TIN_N_kg_ha),
+  q50                           = NO3_mgL ~ s(day50_doy),
+  q50_temp                      = NO3_mgL ~ s(day50_doy) + s(temp_anomaly),
+  q50_wetdep                    = NO3_mgL ~ s(day50_doy) + s(TIN_N_kg_ha),
+  q50_temp_wetdep               = NO3_mgL ~ s(day50_doy) + s(temp_anomaly) + s(TIN_N_kg_ha),
+  q50_WYprecip                  = NO3_mgL ~ s(day50_doy) + s(WY_total_precip),
+  q50_WYprecip_wetdep           = NO3_mgL ~ s(day50_doy) + s(WY_total_precip) + s(TIN_N_kg_ha),
   
   laggedprecip1_lastyearonly    = NO3_mgL ~ s(lag1_WY_total_precip),
   laggedprecip1_thisyear        = NO3_mgL ~ s(lag1_WY_total_precip) + s(WY_total_precip),
@@ -268,14 +268,8 @@ nitrate_models <- list(
   twoyearmeanprecip             = NO3_mgL ~ s(WY_totalprecip_2yr_mean),
   twoyearmeanprecip_temp        = NO3_mgL ~ s(WY_totalprecip_2yr_mean) + s(temp_anomaly),
   twoyearmeanprecip_wetdep      = NO3_mgL ~ s(WY_totalprecip_2yr_mean) + s(TIN_N_kg_ha), 
-  twoyearmeanprecip_temp_wetdep = NO3_mgL ~ s(WY_totalprecip_2yr_mean) + s(temp_anomaly) + s(TIN_N_kg_ha),
-  WYprecip_q50          = NO3_mgL ~ te(WY_total_precip, day50_doy),
-  WYprecip_q50_wetdep   = NO3_mgL ~ te(WY_total_precip, day50_doy) + s(TIN_N_kg_ha),
-  laggedprecip1_q50     = NO3_mgL ~ te(lag1_WY_total_precip, day50_doy) + te(WY_total_precip, day50_doy),
-  twoyearmean_q50       = NO3_mgL ~ te(WY_totalprecip_2yr_mean, day50_doy),
-  twoyearmean_q50_wetdep = NO3_mgL ~ te(WY_totalprecip_2yr_mean, day50_doy) + s(TIN_N_kg_ha),
-  pdsi_q50                  = NO3_mgL ~ te(pdsi, day50_doy, k=c(5,10)),
-  pdsi_q50_wetdep           = NO3_mgL ~ te(pdsi, day50_doy, k=c(5,10)) + s(TIN_N_kg_ha)
+  twoyearmeanprecip_temp_wetdep = NO3_mgL ~ s(WY_totalprecip_2yr_mean) + s(temp_anomaly) + s(TIN_N_kg_ha)
+
 )
 
 
@@ -476,120 +470,85 @@ best_models_nitrate <- best_models_nitrate %>%
 
 
 
+library(patchwork)
+## IAO addition:
+## Pulling out the best models and then exporting the smooths
+selected_keys <- best_models_nitrate %>% 
+  mutate(lake_model = paste(lake_ID, model, sep = "_")) %>% 
+  pull(lake_model)
 
+## Set the directory of where two put the plots
+out_dir <- here::here("plots", "nitrate GAMs")
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-#split by lake ID
-unique(monthly_gam_df$lake_ID)
-lake_list <- split(monthly_gam_df, monthly_gam_df$lake_ID)
-
-
-#write out all the model combos for nitrate
-
-#climate x dep
-nitrate_models <- list(
-  temp_anomaly       = NO3_mgL ~ s(temp_anomaly),
-  precip             = NO3_mgL ~ s(monthly_total_precip),
-  temp_precip        = NO3_mgL ~ s(temp_anomaly) + s(monthly_total_precip),
-  wetdep_TIN         = NO3_mgL ~ s(TIN_N_kg_ha),
-  temp_wetdep        = NO3_mgL ~ s(temp_anomaly) + s(TIN_N_kg_ha),
-  precip_wetdep      = NO3_mgL ~ s(monthly_total_precip) + s(TIN_N_kg_ha),
-  temp_precip_wetdep = NO3_mgL ~ s(temp_anomaly) + s(monthly_total_precip) + s(TIN_N_kg_ha),
-  pdsi              = NO3_mgL ~ s(monthly_mean_pdsi),
-  pdsi_wetdep              = NO3_mgL ~ s(monthly_mean_pdsi) + s(TIN_N_kg_ha)
-  # year                 = NO3_mgL ~ s(year)
-)
-
-
-
-# list out all the outputs i want from each model
-all_models <- list()
-stats <- data.frame(
-  lake_ID = character(),
-  model = character(),
-  term = character(),
-  EDF = numeric(),
-  F_statistic = numeric(),
-  p_value = numeric(),
-  Deviance_Explained = numeric(),
-  R_squared = numeric(),
-  AIC = numeric(),
-  stringsAsFactors = FALSE
-)
-
-
-
-#loop to run all models for all lakes and store the model outputs
-for (site in names(lake_list)) {
-  df <- lake_list[[site]]
-  
-  for (model_name in names(nitrate_models)) {
-    modelformula <- nitrate_models[[model_name]]
-    
-    model <- try(gam(modelformula, 
-                     family = Gamma(link = "log"), 
-                     method = "REML", 
-                     data = df, 
-                     na.action = na.omit), silent = TRUE)
-    if (inherits(model, "try-error")) {
-      message("Model failed for ", site, " with ", model_name)
-      next
-    }    
-    sm <- summary(model)
-    dev_expl <- sm$dev.expl * 100
-    r2 <- sm$r.sq 
-    aic <- AIC(model)
-    
-    if (!is.null(sm$s.table) && nrow(sm$s.table) > 0) {
-      smooth_terms <- as.data.frame(sm$s.table)
-      smooth_terms$term <- rownames(smooth_terms)
-      
-      for (i in 1:nrow(smooth_terms)) {
-        stats <- rbind(stats, data.frame(
-          lake_ID = site,
-          model = model_name,
-          term = smooth_terms$term[i],
-          EDF = smooth_terms$edf[i],
-          F_statistic = smooth_terms$F[i],
-          p_value = smooth_terms$`p-value`[i],
-          Deviance_Explained = dev_expl,
-          R_squared = r2,
-          AIC = aic,
-          stringsAsFactors = FALSE
-        ))
-      }
-    }
-    
-    all_models[[paste(site, model_name, sep = "_")]] <- model
-  }
+if (!dir.exists(out_dir)) {
+  dir.create(out_dir, recursive = TRUE)
 }
 
 
-stats <- stats[order(stats$lake_ID, stats$AIC), ]
+## Auto batch loop with 1 model per page
+n_per_page <- 1
+n_batches  <- ceiling(length(selected_keys) / n_per_page)
+
+for (batch_id in seq_len(n_batches)) {
+  
+  keys_subset <- selected_keys[
+    ((batch_id - 1) * n_per_page + 1) :
+      min(batch_id * n_per_page, length(selected_keys))
+  ]
+  
+  key <- keys_subset[1]
+  safe_name <- gsub("[^A-Za-z0-9_]", "_", key)
+  
+  plots <- lapply(keys_subset, function(key) {
+    mod <- all_models[[key]]
+    if (inherits(mod, "gam")) {
+      gratia::draw(mod)
+    } else {
+      NULL
+    }
+  })
+  
+  plots <- Filter(Negate(is.null), plots)
+  
+  p <- wrap_plots(plots, ncol = 1) +
+    patchwork::plot_annotation(title = key)
+  
+  ggsave(
+    filename = here::here("plots", "nitrate GAMs",
+                          paste0("GAM_", safe_name, ".png")),
+    plot     = p,
+    width    = 8,
+    height   = 6,
+    units    = "in",
+    dpi = 300
+  )
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

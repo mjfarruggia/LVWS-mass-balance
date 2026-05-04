@@ -450,6 +450,18 @@ nadp_sulfate_matrix <- co98_interpolated %>%
   pivot_wider(names_from = date, values_from = SO4) %>%
   as.matrix()
 
+#add rownames
+sites <- tibble(
+  site = c("sky_in_n", "sky_in_s", "sky_ls", "sky_out","andrewscreek_shr", "loch_in", "loch_ls", "loch_out"),
+  lake_site = c("sky", "sky", "sky", "sky", "andrewscreek", "loch", "loch", "loch"))
+
+n_sites <- nrow(sites)
+
+# repeat rows and name them
+nadp_totalN_matrix <- nadp_totalN_matrix[rep(1, n_sites), ]
+nadp_sulfate_matrix <- nadp_sulfate_matrix[rep(1, n_sites), ]
+rownames(nadp_totalN_matrix) <- sites$site
+rownames(nadp_sulfate_matrix) <- sites$site
 
 #plot annual totals
 annual_total_dep <- co98_interpolated %>%

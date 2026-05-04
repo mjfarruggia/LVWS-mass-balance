@@ -10,8 +10,8 @@ library(MARSS)
 load('data/mj_aslo/ts_matrices.Rdata')
 
 #######################################################################################################################################################################################################
-#response variable (observations)
-y <- monthly_no3_matrix
+#response variable (observations) - SULFATE
+y <- monthly_so4_matrix
 dim(y)
 row.names(y) 
 #number of different response time series
@@ -20,76 +20,63 @@ nsites <- nrow(y)
 
 #Z-score covariate data so effect magnitudes can be compared directly
 #nadp
-nadp_totalN <- nadp_totalN_matrix
-rownames(nadp_totalN) #theres two values for the whole watershed, based on 1 nadp station but precip from 2 diff gridmet cells
-  #make matrix 1 row since only 1 value for the watershed
-nadp_totalN <- nadp_totalN[1, , drop = FALSE]
-  rownames(nadp_totalN)<- 'LVWS' #one value for the whole watershed
-  the.mean <- apply(nadp_totalN,1, mean, na.rm=TRUE)
-  the.sigma <-sqrt( apply(nadp_totalN,1,var, na.rm=TRUE))
-  nadp_totalN_z <-(nadp_totalN-the.mean)*(1/the.sigma)#z-score data
+nadp_sulfate <- nadp_sulfate_matrix
+rownames(nadp_sulfate) #theres two values for the whole watershed, based on 1 nadp station but precip from 2 diff gridmet cells
+#make matrix 1 row since only 1 value for the watershed
+nadp_sulfate <- nadp_sulfate[1, , drop = FALSE]
+rownames(nadp_sulfate)<- 'LVWS' #one value for the whole watershed
+the.mean <- apply(nadp_sulfate,1, mean, na.rm=TRUE)
+the.sigma <-sqrt( apply(nadp_sulfate,1,var, na.rm=TRUE))
+nadp_sulfate_z <-(nadp_sulfate-the.mean)*(1/the.sigma)#z-score data
 
-#bret's deposition - stops in 2022 and only has summer
-# tin_n_bret <- bret_inorg_n_matrix
-#   #make matrix 1 row since only 1 value for the watershed
-#   tin_n_bret <- tin_n_bret[1, , drop = FALSE]
-#     rownames(tin_n_bret)<- 'LVWS' #one value for the whole watershed
-# 
-#   #z score
-#   the.mean <- apply(tin_n_bret,1, mean, na.rm=TRUE)
-#   the.sigma <-sqrt( apply(tin_n_bret,1,var, na.rm=TRUE))
-#   tin_n_bret_z <-(tin_n_bret-the.mean)*(1/the.sigma)#z-score data
-#   tin_n_bret_z <- tin_n_bret_z[, !is.na(colnames(tin_n_bret_z)) & colnames(tin_n_bret_z) != "NA", drop = FALSE]
-  
+
 #temp anomaly (monthly)
 temp <- temp_anomaly_bysite
-  #make matrix 2 rows since only 2 values for the watershed
-  temp <- temp[c(1, 7), , drop = FALSE]
-  rownames(temp) <- c('temp_upper','temp_lower') #theres two values for the whole watershed from 2 diff gridmet cells. If replacing with lvws met data, this will be one value only.
-  the.mean <- apply(temp,1, mean, na.rm=TRUE)
-  the.sigma <-sqrt( apply(temp,1,var, na.rm=TRUE))
-  temp_z <-(temp-the.mean)*(1/the.sigma)#z-score data
+#make matrix 2 rows since only 2 values for the watershed
+temp <- temp[c(1, 7), , drop = FALSE]
+rownames(temp) <- c('temp_upper','temp_lower') #theres two values for the whole watershed from 2 diff gridmet cells. If replacing with lvws met data, this will be one value only.
+the.mean <- apply(temp,1, mean, na.rm=TRUE)
+the.sigma <-sqrt( apply(temp,1,var, na.rm=TRUE))
+temp_z <-(temp-the.mean)*(1/the.sigma)#z-score data
 
 
 #total monthly precip
 precip <- totalprecip_matrix
-  #make matrix 2 rows since only 2 values for the watershed
-  precip <- precip[c(1, 7), , drop = FALSE]
-  rownames(precip) <- c('precip_upper','precip_lower') #theres two values for the whole watershed from 2 diff gridmet cells. If replacing with lvws met data, this will be one value only.
-  the.mean <- apply(precip,1, mean, na.rm=TRUE)
-  the.sigma <-sqrt( apply(precip,1,var, na.rm=TRUE))
-  precip_z <-(precip-the.mean)*(1/the.sigma)#z-score data
+#make matrix 2 rows since only 2 values for the watershed
+precip <- precip[c(1, 7), , drop = FALSE]
+rownames(precip) <- c('precip_upper','precip_lower') #theres two values for the whole watershed from 2 diff gridmet cells. If replacing with lvws met data, this will be one value only.
+the.mean <- apply(precip,1, mean, na.rm=TRUE)
+the.sigma <-sqrt( apply(precip,1,var, na.rm=TRUE))
+precip_z <-(precip-the.mean)*(1/the.sigma)#z-score data
 
 
 #mean pdsi
- pdsi <- pdsi_matrix
-  #make matrix 2 rows since only 2 values for the watershed
- pdsi <- pdsi[c(1, 7), , drop = FALSE]
-  rownames(pdsi) <- c('pdsi_upper','pdsi_lower') #theres two values for the whole watershed from 2 diff gridmet cells. If replacing with lvws met data, this will be one value only.
-  the.mean <- apply(pdsi,1, mean, na.rm=TRUE)
-  the.sigma <-sqrt( apply(pdsi,1,var, na.rm=TRUE))
-  pdsi_z <-(pdsi-the.mean)*(1/the.sigma)#z-score data
+pdsi <- pdsi_matrix
+#make matrix 2 rows since only 2 values for the watershed
+pdsi <- pdsi[c(1, 7), , drop = FALSE]
+rownames(pdsi) <- c('pdsi_upper','pdsi_lower') #theres two values for the whole watershed from 2 diff gridmet cells. If replacing with lvws met data, this will be one value only.
+the.mean <- apply(pdsi,1, mean, na.rm=TRUE)
+the.sigma <-sqrt( apply(pdsi,1,var, na.rm=TRUE))
+pdsi_z <-(pdsi-the.mean)*(1/the.sigma)#z-score data
 
-  
+
 #days since Q50
-  q50 <- q50_matrix
-  rownames(q50)<- 'LVWS' #one value for the whole watershed
-  the.mean <- apply(q50,1, mean, na.rm=TRUE)
-  the.sigma <-sqrt( apply(q50,1,var, na.rm=TRUE))
-  q50_z <-(q50-the.mean)*(1/the.sigma)#z-score data
+q50 <- q50_matrix
+rownames(q50)<- 'LVWS' #one value for the whole watershed
+the.mean <- apply(q50,1, mean, na.rm=TRUE)
+the.sigma <-sqrt( apply(q50,1,var, na.rm=TRUE))
+q50_z <-(q50-the.mean)*(1/the.sigma)#z-score data
 
 
 #variance should be 1 for all the covariates
-apply(nadp_totalN,1,var, na.rm = TRUE)
-# apply(tin_n_bret_z,1,var, na.rm = TRUE)
+apply(nadp_sulfate,1,var, na.rm = TRUE)
 apply(temp_z,1,var, na.rm = TRUE)
 apply(precip_z,1,var, na.rm = TRUE)
 apply(pdsi_z,1,var, na.rm = TRUE)
 
 #check that they're all the same length/dates
 colnames(y)[1]; colnames(y)[ncol(y)]; ncol(y)
-colnames(nadp_totalN)[1]; colnames(nadp_totalN)[ncol(nadp_totalN)]; ncol(nadp_totalN)
-# colnames(tin_n_bret_z)[1]; colnames(tin_n_bret_z)[ncol(tin_n_bret_z)]; ncol(tin_n_bret_z)
+colnames(nadp_sulfate)[1]; colnames(nadp_sulfate)[ncol(nadp_sulfate)]; ncol(nadp_sulfate)
 colnames(temp_z)[1]; colnames(temp_z)[ncol(temp_z)]; ncol(temp_z)
 colnames(precip_z)[1]; colnames(precip_z)[ncol(precip_z)]; ncol(precip_z)
 colnames(pdsi_z)[1]; colnames(pdsi_z)[ncol(pdsi_z)]; ncol(pdsi_z)
@@ -112,19 +99,19 @@ colnames(pdsi_z)[1]; colnames(pdsi_z)[ncol(pdsi_z)]; ncol(pdsi_z)
 #5 = pdsi (monthly avg)
 
 #Note: First set of letters indicate the process error structure in the model (environmental variability):
-  #Process error codes (for Q matrix)
-  #de = diagonal and equal (all sites have the same process variance)
-  #bp= by proximity (Two clusters of sites that share process variance, upper and lower, upper = sky + andrews, lower = loch)
-    #could potentially do 3 clusters of sites... sky, andrews, loch
-  #du= diagonal and unequal (each site has its own process variance)
-  #bp_cov = testing a version of Q where errors from sites near one another also covary 
-  #type = by waterbody type (sites of similar waterbody types share process variance; lake vs. stream .lake = LS sites, stream = Inlet/outlet/andrews creek sites)
-  #bp_equal = equal variance and covariance
+#Process error codes (for Q matrix)
+#de = diagonal and equal (all sites have the same process variance)
+#bp= by proximity (Two clusters of sites that share process variance, upper and lower, upper = sky + andrews, lower = loch)
+#could potentially do 3 clusters of sites... sky, andrews, loch
+#du= diagonal and unequal (each site has its own process variance)
+#bp_cov = testing a version of Q where errors from sites near one another also covary 
+#type = by waterbody type (sites of similar waterbody types share process variance; lake vs. stream .lake = LS sites, stream = Inlet/outlet/andrews creek sites)
+#bp_equal = equal variance and covariance
 
 #Note: The second set of letters indicates whether to estimate a single effect of a covariate for all the state processes, or whether to estimate site-specific covariate effects 
-  #Effect codes
-  #sh= shared covariate effect among all sites
-  #sep= separate covariate effects estimated for each site
+#Effect codes
+#sh= shared covariate effect among all sites
+#sep= separate covariate effects estimated for each site
 
 #UPDATE THIS WHEN ADDING/CHANGING MODEL STRUCTURES!
 
@@ -198,8 +185,8 @@ bp_equal
 #---stream vs lake
 type <- matrix(list(0), nsites, nsites)
 diag(type) <- c('var.stream', 'var.lake', 'var.stream',
-                        'var.stream',
-                        'var.stream', 'var.lake', 'var.stream')
+                'var.stream',
+                'var.stream', 'var.lake', 'var.stream')
 
 # All streams covary equally regardless of position
 type[1,3] <- type[3,1] <- "cov.stream"
@@ -218,7 +205,7 @@ type
 
 
 #---spatial+type — same-cluster pairs get a cluster-specific covariance, cross-cluster pairs get a weaker type-only covariance
-    # proximity-first with type on top (within-cluster spatial baseline; cross-cluster same-type pairs share weaker covariance)
+# proximity-first with type on top (within-cluster spatial baseline; cross-cluster same-type pairs share weaker covariance)
 bp_type_cov <- matrix(list(0), nsites, nsites)
 diag(bp_type_cov) <- c('var.stream', 'var.lake', 'var.stream',
                        'var.stream',
@@ -325,7 +312,7 @@ V0.model <- 'zero'
 #no covariates
 nocovar <- matrix(0)
 #List of all covariate matrices....UPDATE THIS!!
-c.list <- list(nocovar, nadp_totalN_z,  temp_z, precip_z, pdsi_z)
+c.list <- list(nocovar, nadp_sulfate_z,  temp_z, precip_z, pdsi_z)
 c.list[[2]]
 
 ##C (matrix that maps covariates to the state processes)
@@ -334,7 +321,7 @@ c.list[[2]]
 C_7.1 <- matrix(0,nrow=nsites)
 
 
-# 2: NADP dep (1 row: LVWS - single watershed value)
+# 2: NADP (1 row: LVWS - single watershed value)
 C_7.2_sh  <- matrix(list('dep','dep','dep','dep','dep','dep','dep'), nsites, 1)
 C_7.2_sep <- matrix(list('dep.sky_in_s','dep.sky_ls','dep.sky_out',
                          'dep.andrews','dep.loch_in','dep.loch_ls','dep.loch_out'), nsites, 1)
@@ -445,22 +432,19 @@ summary_df$delta_AICc <- summary_df$AICc - min(summary_df$AICc)
 
 
 # rerun non-converged models with higher maxit
-# no_conv <- which(sapply(mod.output, function(m) m$convergence != 0))
-# names(mod.output)[no_conv]  # check which ones
+no_conv <- which(sapply(mod.output, function(m) m$convergence != 0))
+names(mod.output)[no_conv]  # check which ones
 
-# for(i in no_conv){
-#   mod.list <- list(B=B.list[[combos[i,1]]], Q=Q.list[[combos[i,2]]], Z=Z.list[[combos[i,3]]], R=R.list[[combos[i,4]]],
-#                    A=A.list, U=U.list, c=c.list[[combos[i,7]]], C=C.list[[combos[i,8]]], x0=x0.model, V0=V0.model, tinitx=1)
-#   mod.output[[i]] <- tryCatch(
-#     MARSS(y, model=mod.list, control=list(maxit=5000)),
-#     error = function(e) { message("Model ", mod.names[i], " failed: ", e$message); NULL }
-#   )
-#   names(mod.output)[i] <- mod.names[i] #replace in mod.output if they converged
-# 
-# }
+ for(i in no_conv){
+   mod.list <- list(B=B.list[[combos[i,1]]], Q=Q.list[[combos[i,2]]], Z=Z.list[[combos[i,3]]], R=R.list[[combos[i,4]]],
+                    A=A.list, U=U.list, c=c.list[[combos[i,7]]], C=C.list[[combos[i,8]]], x0=x0.model, V0=V0.model, tinitx=1)
+   mod.output[[i]] <- tryCatch(MARSS(y, model=mod.list, control=list(maxit=5000)),
+    error = function(e) { message("Model ", mod.names[i], " failed: ", e$message); NULL }  )
+  names(mod.output)[i] <- mod.names[i] #replace in mod.output if they converged
+ }
 
 
 #Save model output as Rdata file, to use in other scripts:
-save(mod.output, file="data/mj_aslo/LVWS_nitrate_output_05042026.Rdata")
+save(mod.output, file="data/mj_aslo/LVWS_sulfate_output_05042026.Rdata")
 
 

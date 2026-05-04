@@ -178,6 +178,182 @@ daily_no3_matrix <- lv_no3_daily_wide %>%
 #use 1984 to 2023
 #exclude sky_in_s
 
+
+
+# also prep SO4, silica, N:P ---------------------------------------
+lv_so4 <- lv_wide %>%
+  ungroup() %>%
+  filter(lake_ID %in% c("sky", "loch", "andrewscreek")) %>%
+  filter(!is.na(SO4_mgL)) %>%
+  distinct(lake_ID, sampleLocation, datetimeDenver, .keep_all = TRUE)%>%
+  select(lake_ID, sampleLocation, datetimeDenver, year, SO4_mgL)
+
+lv_so4 <- lv_so4 %>%
+  mutate(datetimeDenver = as.POSIXct(datetimeDenver)) %>%
+  arrange(datetimeDenver)
+
+lv_so4 <- lv_so4 %>%
+  mutate(series = paste(lake_ID, sampleLocation, sep = "_"))
+
+#monthly avg
+lv_so4_monthly <- lv_so4 %>%
+  mutate( month = month(datetimeDenver)) %>%
+  group_by(lake_ID, sampleLocation, year, month) %>%
+  summarise(SO4_mgL = mean(SO4_mgL, na.rm = TRUE),.groups = "drop") %>%
+  mutate(site = paste(lake_ID, sampleLocation, sep = "_"),
+         date = as.Date(paste(year, month, "01", sep = "-")) )%>%
+  arrange(date)
+
+lv_so4_monthly$date <- as.Date(lv_so4_monthly$date)
+
+lv_so4_monthly_wide <- lv_so4_monthly %>%
+  select(date, site, SO4_mgL) %>%
+  pivot_wider(names_from = date,
+              values_from = SO4_mgL)
+
+#daily
+lv_so4_daily <- lv_so4 %>%
+  arrange(datetimeDenver)%>%
+  mutate(site = paste(lake_ID, sampleLocation, sep = "_"))%>%
+  mutate(date = as.Date(datetimeDenver))
+
+lv_so4_daily$date <- as.Date(lv_so4_daily$date)
+
+
+lv_so4_daily_wide <- lv_so4_daily %>%
+  select(date, site, SO4_mgL) %>%
+  pivot_wider(names_from = date,
+              values_from = SO4_mgL)
+
+#rearrange rows so it makes sense spatially
+site_order <- c(
+  "sky_in_n",
+  "sky_in_s",
+  "sky_ls",
+  "sky_out",
+  "andrewscreek_shr",
+  "loch_in",
+  "loch_ls",
+  "loch_out")
+
+lv_so4_monthly_wide<- lv_so4_monthly_wide %>%
+  mutate(site = factor(site, levels = site_order)) %>%
+  arrange(site)
+
+lv_so4_daily_wide<- lv_so4_daily_wide %>%
+  mutate(site = factor(site, levels = site_order)) %>%
+  arrange(site)
+
+#marss format
+monthly_so4_matrix <- lv_so4_monthly_wide %>%
+  column_to_rownames("site") %>%  
+  as.matrix()
+
+daily_so4_matrix <- lv_so4_daily_wide %>%
+  column_to_rownames("site") %>%  
+  as.matrix()
+
+
+
+
+#sio2
+lv_sio2 <- lv_wide %>%
+  ungroup() %>%
+  filter(lake_ID %in% c("sky", "loch", "andrewscreek")) %>%
+  filter(!is.na(SiO2_mgL)) %>%
+  distinct(lake_ID, sampleLocation, datetimeDenver, .keep_all = TRUE)%>%
+  select(lake_ID, sampleLocation, datetimeDenver, year, SiO2_mgL)
+
+lv_sio2 <- lv_sio2 %>%
+  mutate(datetimeDenver = as.POSIXct(datetimeDenver)) %>%
+  arrange(datetimeDenver)
+
+lv_sio2 <- lv_sio2 %>%
+  mutate(series = paste(lake_ID, sampleLocation, sep = "_"))
+
+#monthly avg
+lv_sio2_monthly <- lv_sio2 %>%
+  mutate( month = month(datetimeDenver)) %>%
+  group_by(lake_ID, sampleLocation, year, month) %>%
+  summarise(SiO2_mgL = mean(SiO2_mgL, na.rm = TRUE),.groups = "drop") %>%
+  mutate(site = paste(lake_ID, sampleLocation, sep = "_"),
+         date = as.Date(paste(year, month, "01", sep = "-")) )%>%
+  arrange(date)
+
+lv_sio2_monthly$date <- as.Date(lv_sio2_monthly$date)
+
+lv_sio2_monthly_wide <- lv_sio2_monthly %>%
+  select(date, site, SiO2_mgL) %>%
+  pivot_wider(names_from = date,
+              values_from = SiO2_mgL)
+
+#daily
+lv_sio2_daily <- lv_sio2 %>%
+  arrange(datetimeDenver)%>%
+  mutate(site = paste(lake_ID, sampleLocation, sep = "_"))%>%
+  mutate(date = as.Date(datetimeDenver))
+
+lv_sio2_daily$date <- as.Date(lv_sio2_daily$date)
+
+
+lv_sio2_daily_wide <- lv_sio2_daily %>%
+  select(date, site, SiO2_mgL) %>%
+  pivot_wider(names_from = date,
+              values_from = SiO2_mgL)
+
+#rearrange rows so it makes sense spatially
+site_order <- c(
+  "sky_in_n",
+  "sky_in_s",
+  "sky_ls",
+  "sky_out",
+  "andrewscreek_shr",
+  "loch_in",
+  "loch_ls",
+  "loch_out")
+
+lv_sio2_monthly_wide<- lv_sio2_monthly_wide %>%
+  mutate(site = factor(site, levels = site_order)) %>%
+  arrange(site)
+
+lv_sio2_daily_wide<- lv_sio2_daily_wide %>%
+  mutate(site = factor(site, levels = site_order)) %>%
+  arrange(site)
+
+#marss format
+monthly_sio2_matrix <- lv_sio2_monthly_wide %>%
+  column_to_rownames("site") %>%  
+  as.matrix()
+
+daily_sio2_matrix <- lv_sio2_daily_wide %>%
+  column_to_rownames("site") %>%  
+  as.matrix()
+
+
+#N:P ratio?
+
+#get dissolved N from NO3 and NH4, calc. N:P
+lv_wide <- lv_wide %>%
+  mutate(
+    DIN_mgL = NO3_mgL + NH4_mgL,
+    NP_molar = (DIN_mgL/14) / (PO4_mgL/31))
+
+lv_wide %>%
+  filter(lake_ID %in% c("loch", "sky", "andrewscreek")) %>%
+  mutate(date = as.Date(datetimeDenver)) %>%
+  group_by(lake_ID, date) %>%
+  summarise(NP_molar = mean(NP_molar, na.rm = TRUE), .groups = "drop") %>%
+  ggplot(aes(x = date, y = NP_molar, color = lake_ID)) +
+  geom_line() +
+  theme_minimal() +
+  labs(y = "Mean N:P (molar)", x = "Date")
+
+#low orthoP is blowing up the N:P ratio... maybe dont use this
+
+
+
+
+
 #deposition marss matrix (this data is monthly) ---------------------------------------------------------------------
 monthly_nadp_bret <- read.csv("data/mj_aslo/monthly_dep_lvws.csv")
 
@@ -269,22 +445,24 @@ nadp_totalN_matrix <- co98_interpolated %>%
     pivot_wider(names_from = date, values_from = totalN) %>%
     as.matrix()
 
+nadp_sulfate_matrix <- co98_interpolated %>%
+  select(date, SO4) %>%
+  pivot_wider(names_from = date, values_from = SO4) %>%
+  as.matrix()
+
 
 #plot annual totals
-annual_totalN <- co98_interpolated %>%
+annual_total_dep <- co98_interpolated %>%
   group_by(yr) %>%
-  summarise(
-    totalN_annual = sum(totalN, na.rm = TRUE),
-    .groups = "drop"
-  )
-ggplot(annual_totalN, aes(x = yr, y = totalN_annual)) +
+  summarise(totalN_annual = sum(totalN, na.rm = TRUE),
+            sulfate_annual = sum(SO4, na.rm = TRUE),
+    .groups = "drop")
+ggplot(annual_total_dep, aes(x = yr, y = totalN_annual)) +
   geom_line() +
   geom_point() +
   labs(
     x = "Year",
-    y = "Annual Total N",
-    title = "Annual Total Nitrogen (CO98)"
-  ) +
+    y = "Annual Total N") +
   theme_minimal()
 
 #climate marss matrices---------------------------------------------------------------------
@@ -606,8 +784,15 @@ end_date   <- as.Date("2023-12-31")
 monthly_no3_matrix <- monthly_no3_matrix[, as.Date(colnames(monthly_no3_matrix)) >= start_date & as.Date(colnames(monthly_no3_matrix)) <= end_date]
 daily_no3_matrix <- daily_no3_matrix[, as.Date(colnames(daily_no3_matrix)) >= start_date & as.Date(colnames(daily_no3_matrix)) <= end_date]
 
-nadp_tin_n_matrix <- nadp_tin_n_matrix[, as.Date(colnames(nadp_tin_n_matrix)) >= start_date & as.Date(colnames(nadp_tin_n_matrix)) <= end_date, drop=F]
+monthly_so4_matrix <- monthly_so4_matrix[, as.Date(colnames(monthly_so4_matrix)) >= start_date & as.Date(colnames(monthly_so4_matrix)) <= end_date]
+daily_so4_matrix <- daily_so4_matrix[, as.Date(colnames(daily_so4_matrix)) >= start_date & as.Date(colnames(daily_so4_matrix)) <= end_date]
+
+monthly_sio2_matrix <- monthly_sio2_matrix[, as.Date(colnames(monthly_sio2_matrix)) >= start_date & as.Date(colnames(monthly_sio2_matrix)) <= end_date]
+daily_sio2_matrix <- daily_sio2_matrix[, as.Date(colnames(daily_sio2_matrix)) >= start_date & as.Date(colnames(daily_sio2_matrix)) <= end_date]
+
+nadp_totalN_matrix <- nadp_totalN_matrix[, as.Date(colnames(nadp_totalN_matrix)) >= start_date & as.Date(colnames(nadp_totalN_matrix)) <= end_date, drop=F]
 bret_inorg_n_matrix <- bret_inorg_n_matrix[, as.Date(colnames(bret_inorg_n_matrix)) >= start_date & as.Date(colnames(bret_inorg_n_matrix)) <= end_date, drop=F]
+nadp_sulfate_matrix <- nadp_sulfate_matrix[, as.Date(colnames(nadp_sulfate_matrix)) >= start_date & as.Date(colnames(nadp_sulfate_matrix)) <= end_date, drop=F]
 
 monthly_temp_matrix <- monthly_temp_matrix[, as.Date(colnames(monthly_temp_matrix)) >= start_date & as.Date(colnames(monthly_temp_matrix)) <= end_date, drop=F]
 daily_temp_matrix <- daily_temp_matrix[, as.Date(colnames(daily_temp_matrix)) >= start_date & as.Date(colnames(daily_temp_matrix)) <= end_date, drop=F]
@@ -627,7 +812,10 @@ all_months <- seq(as.Date("1984-01-01"), as.Date("2023-12-01"), by = "month")
 
 #monthly data
 monthly_no3_matrix <- monthly_no3_matrix[, match(all_months, as.Date(colnames(monthly_no3_matrix))), drop=F]
-nadp_tin_n_matrix <- nadp_tin_n_matrix[, match(all_months, as.Date(colnames(nadp_tin_n_matrix))), drop=F]
+monthly_so4_matrix <- monthly_so4_matrix[, match(all_months, as.Date(colnames(monthly_so4_matrix))), drop=F]
+monthly_sio2_matrix <- monthly_sio2_matrix[, match(all_months, as.Date(colnames(monthly_sio2_matrix))), drop=F]
+nadp_totalN_matrix <- nadp_totalN_matrix[, match(all_months, as.Date(colnames(nadp_totalN_matrix))), drop=F]
+nadp_sulfate_matrix <- nadp_sulfate_matrix[, match(all_months, as.Date(colnames(nadp_sulfate_matrix))), drop=F]
 bret_inorg_n_matrix <- bret_inorg_n_matrix[, match(all_months, as.Date(colnames(bret_inorg_n_matrix))), drop=F]
 monthly_temp_matrix <- monthly_temp_matrix[, match(all_months, as.Date(colnames(monthly_temp_matrix))), drop=F]
 totalprecip_matrix <- totalprecip_matrix[, match(all_months, as.Date(colnames(totalprecip_matrix))), drop=F]
@@ -636,6 +824,8 @@ temp_anomaly_bysite <- temp_anomaly_bysite[, match(all_months, as.Date(colnames(
 
 #daily data
 daily_no3_matrix <- daily_no3_matrix[, match(all_days, as.Date(colnames(daily_no3_matrix))), drop=F]
+daily_so4_matrix <- daily_so4_matrix[, match(all_days, as.Date(colnames(daily_so4_matrix))), drop=F]
+daily_sio2_matrix <- daily_sio2_matrix[, match(all_days, as.Date(colnames(daily_sio2_matrix))), drop=F]
 daily_temp_matrix <- daily_temp_matrix[, match(all_days, as.Date(colnames(daily_temp_matrix))), drop=F]
 temp_anomaly_bysite_daily <- temp_anomaly_bysite_daily[, match(all_days, as.Date(colnames(temp_anomaly_bysite_daily))), drop=F]
 q50_matrix <- q50_matrix[, match(all_days, as.Date(colnames(q50_matrix))), drop=F]
@@ -650,7 +840,10 @@ matrix_date_fill <- function(mat, full_dates) {
 
 #monthly
 monthly_no3_matrix      <- matrix_date_fill(monthly_no3_matrix, all_months)
-nadp_tin_n_matrix      <- matrix_date_fill(nadp_tin_n_matrix, all_months)
+monthly_so4_matrix      <- matrix_date_fill(monthly_so4_matrix, all_months)
+monthly_sio2_matrix      <- matrix_date_fill(monthly_sio2_matrix, all_months)
+nadp_totalN_matrix      <- matrix_date_fill(nadp_totalN_matrix, all_months)
+nadp_sulfate_matrix      <- matrix_date_fill(nadp_sulfate_matrix, all_months)
 bret_inorg_n_matrix     <- matrix_date_fill(bret_inorg_n_matrix, all_months)
 monthly_temp_matrix     <- matrix_date_fill(monthly_temp_matrix, all_months)
 totalprecip_matrix     <- matrix_date_fill(totalprecip_matrix, all_months)
@@ -659,12 +852,14 @@ temp_anomaly_bysite     <- matrix_date_fill(temp_anomaly_bysite, all_months)
 
 #daily
 daily_no3_matrix        <- matrix_date_fill(daily_no3_matrix, all_days)
+daily_so4_matrix        <- matrix_date_fill(daily_so4_matrix, all_days)
+daily_sio2_matrix        <- matrix_date_fill(daily_sio2_matrix, all_days)
 daily_temp_matrix       <- matrix_date_fill(daily_temp_matrix, all_days)
 temp_anomaly_bysite_daily       <- matrix_date_fill(temp_anomaly_bysite_daily, all_days)
 q50_matrix       <- matrix_date_fill(q50_matrix, all_days)
 
 # check
-ncol(monthly_no3_matrix); ncol(nadp_tin_n_matrix); ncol(bret_inorg_n_matrix); ncol(monthly_temp_matrix); ncol(temp_anomaly_bysite); ncol(totalprecip_matrix); ncol(pdsi_matrix)
+ncol(monthly_no3_matrix); ncol(monthly_so4_matrix);ncol(monthly_sio2_matrix);ncol(nadp_totalN_matrix);  ncol(nadp_sulfate_matrix);ncol(bret_inorg_n_matrix); ncol(monthly_temp_matrix); ncol(temp_anomaly_bysite); ncol(totalprecip_matrix); ncol(pdsi_matrix)
 ncol(daily_no3_matrix); ncol(daily_temp_matrix); ncol(q50_matrix); ncol(temp_anomaly_bysite_daily)
 
 
@@ -672,7 +867,8 @@ ncol(daily_no3_matrix); ncol(daily_temp_matrix); ncol(q50_matrix); ncol(temp_ano
 
 
 # are there NAs in each covariate? should be Inf -Inf if no NA's (clunky but couldnt think of something slicker atm...)
-range(which(is.na(nadp_tin_n_matrix)))
+range(which(is.na(nadp_totalN_matrix)))
+range(which(is.na(nadp_sulfate_matrix)))
 range(which(is.na(bret_inorg_n_matrix))) #this has NAs
 range(which(is.na(monthly_temp_matrix)))
 range(which(is.na(totalprecip_matrix)))
@@ -685,7 +881,10 @@ range(which(is.na(q50_matrix)))
 
 
 colnames(monthly_no3_matrix)[1]; colnames(monthly_no3_matrix)[ncol(monthly_no3_matrix)]; ncol(monthly_no3_matrix)
-colnames(nadp_tin_n_matrix)[1]; colnames(nadp_tin_n_matrix)[ncol(nadp_tin_n_matrix)]; ncol(nadp_tin_n_matrix)
+colnames(monthly_so4_matrix)[1]; colnames(monthly_so4_matrix)[ncol(monthly_so4_matrix)]; ncol(monthly_so4_matrix)
+colnames(monthly_sio2_matrix)[1]; colnames(monthly_sio2_matrix)[ncol(monthly_sio2_matrix)]; ncol(monthly_sio2_matrix)
+colnames(nadp_totalN_matrix)[1]; colnames(nadp_totalN_matrix)[ncol(nadp_totalN_matrix)]; ncol(nadp_totalN_matrix)
+colnames(nadp_sulfate_matrix)[1]; colnames(nadp_sulfate_matrix)[ncol(nadp_sulfate_matrix)]; ncol(nadp_sulfate_matrix)
 colnames(bret_inorg_n_matrix)[1]; colnames(bret_inorg_n_matrix)[ncol(bret_inorg_n_matrix)]; ncol(bret_inorg_n_matrix)
 colnames(monthly_temp_matrix)[1]; colnames(monthly_temp_matrix)[ncol(monthly_temp_matrix)]; ncol(monthly_temp_matrix)
 colnames(totalprecip_matrix)[1]; colnames(totalprecip_matrix)[ncol(totalprecip_matrix)]; ncol(totalprecip_matrix)
@@ -704,8 +903,11 @@ colnames(bret_inorg_n_matrix)<-as.character(as.Date(colnames(bret_inorg_n_matrix
 colnames(daily_no3_matrix)<-as.character(as.Date(colnames(daily_no3_matrix)))
 colnames(daily_temp_matrix)<-as.character(as.Date(colnames(daily_temp_matrix)))
 colnames(monthly_no3_matrix)<-as.character(as.Date(colnames(monthly_no3_matrix)))
+colnames(monthly_so4_matrix)<-as.character(as.Date(colnames(monthly_so4_matrix)))
+colnames(monthly_sio2_matrix)<-as.character(as.Date(colnames(monthly_sio2_matrix)))
 colnames(monthly_temp_matrix)<-as.character(as.Date(colnames(monthly_temp_matrix)))
-colnames(nadp_tin_n_matrix)<-as.character(as.Date(colnames(nadp_tin_n_matrix)))
+colnames(nadp_totalN_matrix)<-as.character(as.Date(colnames(nadp_totalN_matrix)))
+colnames(nadp_sulfate_matrix)<-as.character(as.Date(colnames(nadp_sulfate_matrix)))
 colnames(pdsi_matrix)<-as.character(as.Date(colnames(pdsi_matrix)))
 colnames(q50_matrix)<-as.character(as.Date(colnames(q50_matrix)))
 colnames(temp_anomaly_bysite)<-as.character(as.Date(colnames(temp_anomaly_bysite)))
@@ -721,8 +923,18 @@ monthly_no3_matrix <- monthly_no3_matrix[, format(as.Date(colnames(monthly_no3_m
 daily_no3_matrix <- daily_no3_matrix[, format(as.Date(colnames(daily_no3_matrix)), "%m-%d") >= start_openwater &
                                        format(as.Date(colnames(daily_no3_matrix)), "%m-%d") <= end_openwater, drop = FALSE]
 
-nadp_tin_n_matrix <- nadp_tin_n_matrix[, format(as.Date(colnames(nadp_tin_n_matrix)), "%m-%d") >= start_openwater &
-                                         format(as.Date(colnames(nadp_tin_n_matrix)), "%m-%d") <= end_openwater, drop = FALSE]
+monthly_so4_matrix <- monthly_so4_matrix[, format(as.Date(colnames(monthly_so4_matrix)), "%m-%d") >= start_openwater &
+                                           format(as.Date(colnames(monthly_so4_matrix)), "%m-%d") <= end_openwater, drop = FALSE]
+
+monthly_sio2_matrix <- monthly_sio2_matrix[, format(as.Date(colnames(monthly_sio2_matrix)), "%m-%d") >= start_openwater &
+                                           format(as.Date(colnames(monthly_sio2_matrix)), "%m-%d") <= end_openwater, drop = FALSE]
+
+nadp_totalN_matrix <- nadp_totalN_matrix[, format(as.Date(colnames(nadp_totalN_matrix)), "%m-%d") >= start_openwater &
+                                         format(as.Date(colnames(nadp_totalN_matrix)), "%m-%d") <= end_openwater, drop = FALSE]
+
+nadp_sulfate_matrix <- nadp_sulfate_matrix[, format(as.Date(colnames(nadp_sulfate_matrix)), "%m-%d") >= start_openwater &
+                                         format(as.Date(colnames(nadp_sulfate_matrix)), "%m-%d") <= end_openwater, drop = FALSE]
+
 
 bret_inorg_n_matrix <- bret_inorg_n_matrix[, format(as.Date(colnames(bret_inorg_n_matrix)), "%m-%d") >= start_openwater &
                                              format(as.Date(colnames(bret_inorg_n_matrix)), "%m-%d") <= end_openwater, drop = FALSE]
@@ -753,8 +965,11 @@ bret_inorg_n_matrix <- bret_inorg_n_matrix[rownames(bret_inorg_n_matrix) != "sky
 daily_no3_matrix <- daily_no3_matrix[rownames(daily_no3_matrix) != "sky_in_n", , drop = FALSE]
 daily_temp_matrix <- daily_temp_matrix[rownames(daily_temp_matrix) != "sky_in_n", , drop = FALSE]
 monthly_no3_matrix <- monthly_no3_matrix[rownames(monthly_no3_matrix) != "sky_in_n", , drop = FALSE]
+monthly_so4_matrix <- monthly_so4_matrix[rownames(monthly_so4_matrix) != "sky_in_n", , drop = FALSE]
+monthly_sio2_matrix <- monthly_sio2_matrix[rownames(monthly_sio2_matrix) != "sky_in_n", , drop = FALSE]
 monthly_temp_matrix <- monthly_temp_matrix[rownames(monthly_temp_matrix) != "sky_in_n", , drop = FALSE]
-nadp_tin_n_matrix <- nadp_tin_n_matrix[rownames(nadp_tin_n_matrix) != "sky_in_n", , drop = FALSE]
+nadp_totalN_matrix <- nadp_totalN_matrix[rownames(nadp_totalN_matrix) != "sky_in_n", , drop = FALSE]
+nadp_sulfate_matrix <- nadp_sulfate_matrix[rownames(nadp_sulfate_matrix) != "sky_in_n", , drop = FALSE]
 pdsi_matrix <- pdsi_matrix[rownames(pdsi_matrix) != "sky_in_n", , drop = FALSE]
 temp_anomaly_bysite <- temp_anomaly_bysite[rownames(temp_anomaly_bysite) != "sky_in_n", , drop = FALSE]
 totalprecip_matrix <- totalprecip_matrix[rownames(totalprecip_matrix) != "sky_in_n", , drop = FALSE]
@@ -762,7 +977,7 @@ totalprecip_matrix <- totalprecip_matrix[rownames(totalprecip_matrix) != "sky_in
 
 
 # are there NAs in each covariate? should be Inf -Inf if no NA's (clunky but couldnt think of something slicker atm...)
-range(which(is.na(nadp_tin_n_matrix)))
+range(which(is.na(nadp_totalN_matrix)))
 range(which(is.na(bret_inorg_n_matrix))) #this has NAs
 range(which(is.na(monthly_temp_matrix)))
 range(which(is.na(totalprecip_matrix)))
@@ -786,8 +1001,11 @@ range(which(is.na(q50_matrix)))
 # save all matrices into one .RData file
 save(
   bret_inorg_n_matrix,
-  nadp_tin_n_matrix,
+  nadp_totalN_matrix,
+  nadp_sulfate_matrix,
   monthly_no3_matrix,
+  monthly_so4_matrix,
+  monthly_sio2_matrix,
   daily_no3_matrix,
   pdsi_matrix,
   daily_temp_matrix,

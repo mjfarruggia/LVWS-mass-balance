@@ -2,7 +2,7 @@
 library(MARSS)
 
 
-load('data/mj_aslo/LVWS_output_04222026.Rdata')
+load('data/mj_aslo/LVWS_nitrate_output_05072026.Rdata')
 
 
 names(mod.output)

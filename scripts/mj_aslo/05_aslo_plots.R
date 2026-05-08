@@ -285,12 +285,12 @@ cowplot::plot_grid(mean_temp_plot, wyprecip_plot, ncol=2)
 
 
 #deposition
-str(nadp_tin_n_matrix)
+str(nadp_totalN_matrix)
 
-nadp_long <- as.data.frame(nadp_tin_n_matrix) %>%
-  mutate(lake_ID = rownames(nadp_tin_n_matrix)) %>%
+nadp_long <- as.data.frame(nadp_totalN_matrix) %>%
+  mutate(lake_ID = rownames(nadp_totalN_matrix)) %>%
   filter(lake_ID %in% c("sky_out", "loch_out")) %>%
-  pivot_longer(-lake_ID, names_to = "date", values_to = "tin_n") %>%
+  pivot_longer(-lake_ID, names_to = "date", values_to = "totalN") %>%
     mutate(
     date = as.Date(date),
     lake_ID = case_when(
@@ -301,10 +301,10 @@ nadp_long <- as.data.frame(nadp_tin_n_matrix) %>%
 nadp_annual <- nadp_long %>%
   mutate(yr = year(date)) %>%
   group_by(lake_ID, yr) %>%
-  summarise(tin_n_annual = sum(tin_n, na.rm = TRUE), .groups = "drop")
+  summarise(totalN_annual = sum(totalN, na.rm = TRUE), .groups = "drop")
 
-nadp_annual_plot <- ggplot(nadp_annual, aes(yr, tin_n_annual, color = lake_ID)) +
-  geom_line(alpha = 0.4) +
+nadp_annual_plot <- ggplot(nadp_annual, aes(yr, totalN_annual, color = lake_ID)) +
+  geom_line(alpha = 0.8) +
   geom_smooth(method = "loess", linewidth = 1.2, se = T) +
   labs(x = "Year", y = "Annual Total N deposition", color = "Watershed Position") +
   scale_color_manual(values = c(
@@ -312,8 +312,35 @@ nadp_annual_plot <- ggplot(nadp_annual, aes(yr, tin_n_annual, color = lake_ID)) 
     "Lower" = "dodgerblue"
   )) +
   dark_theme(base_size = 18) +
-  theme(legend.position = "bottom",legend.title = element_text(size = 10),legend.text  = element_text(size = 9))
+  theme(legend.position = "none",legend.title = element_text(size = 10),legend.text  = element_text(size = 9))
 nadp_annual_plot
+
+
+
+nadp_annual_sulfate <- nadp_wetdep %>%
+  group_by(lake_ID, year) %>%
+  summarise(sulfate_annual = sum(SO4_kg_ha, na.rm = TRUE), .groups = "drop")
+
+nadp_annual_sulfate <- nadp_annual_sulfate %>%
+  filter(lake_ID %in% c( "LOCH")) %>%
+  mutate(
+    lake_ID = case_when(
+      lake_ID == "LOCH" ~ "Lower",
+      TRUE ~ lake_ID))
+
+sulfate_annual_plot<- ggplot(nadp_annual_sulfate, aes(year, sulfate_annual, color = lake_ID)) +
+  geom_line(alpha = 0.8) +
+  geom_smooth(method = "loess", linewidth = 1.2, se = T) +
+  labs(x = "Year", y = "Annual Total Sulfate deposition", color = "Watershed Position") +
+  scale_color_manual(values = c(
+    "Upper" = "purple",
+    "Lower" = "dodgerblue"
+  )) +
+  dark_theme(base_size = 18) +
+  theme(legend.position = "none",legend.title = element_text(size = 10),legend.text  = element_text(size = 9))
+sulfate_annual_plot
+
+cowplot::plot_grid(nadp_annual_plot, sulfate_annual_plot, ncol=2)
 
 nadp_lower <- as.data.frame(nadp_tin_n_matrix) %>%
   mutate(lake_ID = rownames(nadp_tin_n_matrix)) %>%
@@ -332,44 +359,128 @@ ggplot(nadp_lower, aes(date, tin_n)) +
 loch_chem <- summer_lake_surface_chem %>%
   filter(lake_ID %in% c("sky", "loch", 'andrewscreek')) %>%
   mutate(lake_ID = case_when(
-    grepl("sky", lake_ID, ignore.case = TRUE) ~ "Upper",
+    grepl("sky", lake_ID, ignore.case = TRUE) ~ "Upper S.",
     grepl("loch", lake_ID, ignore.case = TRUE) ~ "Lower",
-    grepl("andrewscreek", lake_ID, ignore.case = TRUE) ~ "Mid")) %>%
-  mutate(lake_ID = factor(lake_ID, levels = c("Upper", "Mid","Lower")))
+    grepl("andrewscreek", lake_ID, ignore.case = TRUE) ~ "Upper N.")) %>%
+  mutate(lake_ID = factor(lake_ID, levels = c("Upper S.", "Upper N.","Lower")))
+
+loch_chem_summermean <- loch_chem %>%
+  mutate(year = year(datetimeDenver)) %>%   
+  group_by(year, lake_ID, site_ID) %>%      
+  summarise(
+    across(
+      where(is.numeric),
+      ~ mean(.x, na.rm = TRUE)),
+    .groups = "drop")
 
 
-nitrate <- ggplot(loch_chem, aes(year, NO3_mgL, color = lake_ID)) +
-  geom_point(alpha = 0.4, size = 1) +
+nitrate <- ggplot(loch_chem_summermean, aes(year, NO3_mgL, color = lake_ID)) +
+  geom_point(alpha = 0.8, size = 1) +
   geom_smooth(method = "loess", linewidth = 1.2, se = T) +
   labs(x = "Year",y = expression(NO[3]~"(mg/L)"), color = "Watershed\nPosition") +
   scale_color_manual(values = c(
-    "Upper" = "purple",
-    "Mid"   = "forestgreen",
+    "Upper S." = "purple",
+    "Upper N."   = "forestgreen",
     "Lower" = "dodgerblue")) +
   dark_theme(base_size = 18) +
   theme(legend.position = "bottom",legend.title = element_text(size = 10),legend.text  = element_text(size = 9))
 nitrate
 
-sulfate <- ggplot(loch_chem, aes(year, SO4_mgL, color = lake_ID)) +
-  geom_point(alpha = 0.4, size = 1) +
+nitratefacet <- ggplot(loch_chem_summermean, aes(year, NO3_mgL, color = lake_ID)) +
+  geom_point(alpha = 0.8, size = 1) +
+  geom_smooth(method = "loess", linewidth = 1.2, se = TRUE) +
+  facet_wrap(~lake_ID, ncol=1) +
+  labs(
+    x = "Year",
+    y = expression(NO[3]~"(mg/L)"),
+    color = "Watershed\nPosition"
+  ) +
+  scale_color_manual(values = c(
+    "Upper S." = "purple",
+    "Upper N." = "forestgreen",
+    "Lower" = "dodgerblue"
+  )) +
+  dark_theme(base_size = 18) 
+nitratefacet
+
+lake_colors <- c(
+  "Upper S." = "purple",
+  "Upper N." = "forestgreen",
+  "Lower" = "dodgerblue"
+)
+
+nitrate_sky <- loch_chem_summermean %>%
+  filter(lake_ID == "Upper S.") %>%
+  ggplot(aes(year, NO3_mgL)) +
+  geom_point(color = "purple", alpha = 0.8, size = 1) +
+  geom_smooth(color = "purple", method = "loess", linewidth = 1.2, se = TRUE) +
+  labs( x = "Year", y = expression(NO[3]~"(mg/L)")) +
+  dark_theme(base_size = 18)
+nitrate_sky
+
+nitrate_andrews <- loch_chem_summermean %>%
+  filter(lake_ID == "Upper N.") %>%
+  ggplot(aes(year, NO3_mgL)) +
+  geom_point(color = "forestgreen", alpha = 0.8, size = 1) +
+  geom_smooth(color = "forestgreen", method = "loess", linewidth = 1.2, se = TRUE) +
+  labs(x = "Year", y = expression(NO[3]~"(mg/L)")) +
+  dark_theme(base_size = 18)
+nitrate_andrews
+
+nitrate_loch <- loch_chem_summermean %>%
+  filter(lake_ID == "Lower") %>%
+  ggplot(aes(year, NO3_mgL)) +
+  geom_point(color = "dodgerblue", alpha = 0.8, size = 1) +
+  geom_smooth(color = "dodgerblue", method = "loess", linewidth = 1.2, se = TRUE) +
+  labs( x = "Year", y = expression(NO[3]~"(mg/L)")) +
+  dark_theme(base_size = 18)
+
+sulfate <- ggplot(loch_chem_summermean, aes(year, SO4_mgL, color = lake_ID)) +
+  geom_point(alpha = 0.8, size = 1) +
   geom_smooth(method = "loess", linewidth = 1.2, se = T) +
   labs(x = "Year",y = expression(SO[4]~"(mg/L)"), color = "Watershed\nPosition") +
   scale_color_manual(values = c(
-    "Upper" = "purple",
-    "Mid"   = "forestgreen",
+    "Upper S." = "purple",
+    "Upper N."   = "forestgreen",
     "Lower" = "dodgerblue")) +
   dark_theme(base_size = 18) +
   theme(legend.position = "bottom",legend.title = element_text(size = 10),legend.text  = element_text(size = 9))
 sulfate
 
 
+so4_sky <- loch_chem_summermean %>%
+  filter(lake_ID == "Upper S.") %>%
+  ggplot(aes(year, SO4_mgL)) +
+  geom_point(color = "purple", alpha = 0.8, size = 1) +
+  geom_smooth(color = "purple", method = "loess", linewidth = 1.2, se = TRUE) +
+  labs(x = "Year", y = expression(SO[4]~"(mg/L)")) +
+  dark_theme(base_size = 18)
+
+so4_andrews <- loch_chem_summermean %>%
+  filter(lake_ID == "Upper N.") %>%
+  ggplot(aes(year, SO4_mgL)) +
+  geom_point(color = "forestgreen", alpha = 0.8, size = 1) +
+  geom_smooth(color = "forestgreen", method = "loess", linewidth = 1.2, se = TRUE) +
+  labs(x = "Year", y = expression(SO[4]~"(mg/L)")) +
+  dark_theme(base_size = 18)
+
+so4_loch <- loch_chem_summermean %>%
+  filter(lake_ID == "Lower") %>%
+  ggplot(aes(year, SO4_mgL)) +
+  geom_point(color = "dodgerblue", alpha = 0.8, size = 1) +
+  geom_smooth(color = "dodgerblue", method = "loess", linewidth = 1.2, se = TRUE) +
+  labs(x = "Year", y = expression(SO[4]~"(mg/L)")) +
+  dark_theme(base_size = 18)
+
+
+
 silica<- ggplot(loch_chem, aes(year, SiO2_mgL, color = lake_ID)) +
-  geom_point(alpha = 0.4, size = 1) +
-  geom_smooth(method = "loess", linewidth = 1.2, se = T) +
+  geom_point(alpha = 0.8, size = 1) +
+  geom_smooth(method = "gam", linewidth = 1.2, se = T) +
   labs(x = "Year",y = expression(SiO[2]~"(mg/L)"), color = "Watershed\nPosition") +
   scale_color_manual(values = c(
-    "Upper" = "purple",
-    "Mid"   = "forestgreen",
+    "Upper S." = "purple",
+    "Upper N."   = "forestgreen",
     "Lower" = "dodgerblue")) +
   dark_theme(base_size = 18) +
   theme(legend.position = "bottom",legend.title = element_text(size = 10),legend.text  = element_text(size = 9))
@@ -388,11 +499,116 @@ loch_chem <- loch_chem %>%
 
 np_ratio <- ggplot(loch_chem, aes(year, NP_ratio, color = lake_ID)) +
   geom_point(alpha = 0.4, size = 1) +
-  geom_smooth(method = "loess", linewidth = 1.2, se = TRUE) +
+  geom_smooth(method = "gam", linewidth = 1.2, se = TRUE) +
   labs(x = "Year", y = "N:P", color = "Watershed\nPosition") +
   scale_color_manual(values = c(Upper="purple", Mid="forestgreen", Lower="dodgerblue")) +
   dark_theme(base_size = 18) +
   theme(legend.position = "bottom",legend.title = element_text(size = 10),legend.text  = element_text(size = 9))
 np_ratio
 
-plot_grid(nitrate, sulfate, silica, np_ratio, ncol=2)
+cowplot::plot_grid(nitrate, sulfate,  ncol=1)
+
+
+
+
+
+#weathering
+
+#ca mg
+loch_chem %>%
+  mutate(Ca_Mg_mgL = Ca_mgL + Mg_mgL) %>%
+  ggplot(aes(year, Ca_Mg_mgL, color = lake_ID)) +
+  geom_point(alpha = 0.8, size = 1) +
+  geom_smooth(method = "gam", linewidth = 1.2, se = TRUE) +
+  labs(
+    x = "Year",
+    y = "Ca + Mg (mg/L)",
+    color = "Watershed\nPosition"
+  ) +
+  scale_color_manual(values = c(
+    "Upper S." = "purple",
+    "Upper N." = "forestgreen",
+    "Lower" = "dodgerblue"
+  )) +
+  dark_theme(base_size = 18) +
+  theme(
+    legend.position = "bottom",
+    legend.title = element_text(size = 10),
+    legend.text = element_text(size = 9)
+  )
+
+
+#base cations
+loch_chem %>%
+  mutate(base_cations = Mg_mgL + Na_mgL + K_mgL) %>%
+  ggplot(aes(year, base_cations, color = lake_ID)) +
+  geom_point(alpha = 0.8, size = 1) +
+  geom_smooth(method = "gam", linewidth = 1.2, se = TRUE) +
+  labs(
+    x = "Year",
+    y = "Base cations ( Mg + Na + K, mg/L)",
+    color = "Watershed\nPosition"
+  ) +
+  scale_color_manual(values = c(
+    "Upper S." = "purple",
+    "Upper N." = "forestgreen",
+    "Lower" = "dodgerblue"
+  )) +
+  dark_theme(base_size = 18) +
+  theme(
+    legend.position = "bottom",
+    legend.title = element_text(size = 10),
+    legend.text = element_text(size = 9)
+  )
+
+
+
+loch_chem <- loch_chem %>%
+  mutate(BC_noCa = Mg_mgL + Na_mgL + K_mgL)
+
+so4_bc_plot <- ggplot(loch_chem, aes(BC_noCa, SO4_mgL, color = lake_ID)) +
+  geom_point(alpha = 0.7, size = 1) +
+  geom_smooth(method = "gam", se = TRUE, linewidth = 1.1) +
+   facet_wrap(~lake_ID, ncol = 1) +
+  coord_cartesian(xlim = c(NA, 1.5)) +
+  labs(
+    x = "Base cations (Mg + Na + K)",
+    y = expression(SO[4]~"(mg/L)")
+  ) +
+  scale_color_manual(values = c(
+    "Upper S." = "purple",
+    "Upper N." = "forestgreen",
+    "Lower" = "dodgerblue"
+  )) +
+  dark_theme(base_size = 18)
+so4_bc_plot
+
+so4_sky <- loch_chem %>%
+  filter(lake_ID == "Upper S.") %>%
+  ggplot(aes(BC_noCa, SO4_mgL)) +
+  geom_point(color = "purple", alpha = 0.7, size = 1) +
+  geom_smooth(color = "purple", method = "gam", se = TRUE, linewidth = 1.1) +
+  coord_cartesian(xlim = c(NA, 1.4)) +
+  labs(x = "Base cations (Mg + Na + K)", y = expression(SO[4]~"(mg/L)")) +
+  dark_theme(base_size = 18)
+so4_sky
+
+so4_andrews <- loch_chem %>%
+  filter(lake_ID == "Upper N.") %>%
+  ggplot(aes(BC_noCa, SO4_mgL)) +
+  geom_point(color = "forestgreen", alpha = 0.7, size = 1) +
+  geom_smooth(color = "forestgreen", method = "gam", se = TRUE, linewidth = 1.1) +
+  coord_cartesian(xlim = c(NA, 1.4)) +
+  labs(x = "Base cations (Mg + Na + K)", y = expression(SO[4]~"(mg/L)")) +
+  dark_theme(base_size = 18)
+so4_andrews
+
+so4_loch <- loch_chem %>%
+  filter(lake_ID == "Lower") %>%
+  ggplot(aes(BC_noCa, SO4_mgL)) +
+  geom_point(color = "dodgerblue", alpha = 0.7, size = 1) +
+  geom_smooth(color = "dodgerblue", method = "gam", se = TRUE, linewidth = 1.1) +
+  coord_cartesian(xlim = c(NA, 1.4)) +
+  labs(x = "Base cations (Mg + Na + K)", y = expression(SO[4]~"(mg/L)")) +
+  dark_theme(base_size = 18)
+so4_loch

@@ -56,7 +56,7 @@ lv_filtered <- lv %>%
   filter(
     sampleType == "norm",
     month %in% 6:9, #summer only
-    sampleLocation %in% c("ls", "shr", "out", "in",  "in_n"), 
+    sampleLocation %in% c("ls", "shr", "out", "in",  "in_s"), 
     sampleReplicate == 1) 
 
 lv_filtered$site_ID <- paste(lv_filtered$siteId, lv_filtered$sampleLocation, sep = "_")
@@ -175,12 +175,23 @@ nadp_wetdep <- nadp_wetdep %>%
   mutate(lake_ID = tolower(lake_ID))
 
 
+#make a more integrated deposition metric - like cumulative WY totals up until the date of sampling maybe?
+cumulative_dep <- nadp_wetdep %>%
+  mutate(date = as.Date(sprintf("%d-%02d-01", year, month)), wy = if_else(month >= 10, year + 1, year)) %>%
+  arrange(lake_ID, wy, date) %>%
+  group_by(lake_ID, wy) %>%
+  mutate(across(c(TIN_N_kg_ha, SO4_kg_ha, NO3_kg_ha, NH4_kg_ha),
+    cumsum, .names = "cum_{.col}" )) %>%
+  ungroup()
+
+
+
 lv_nitrate_joined <- lv_nitrate %>%
   mutate(year = year(date), month = month(date)) %>%
   left_join(daily_climate, by = c("lake_ID", "date")) %>%
   left_join(temp_anomaly_bysite_daily, by = c("site_ID" = "lake_ID", "date")) %>%
-  left_join(nadp_wetdep %>% select(lake_ID, year, month,  TIN_N_kg_ha),
-            by = c("lake_ID", "year", "month")) %>%
+  left_join(nadp_wetdep %>% select(lake_ID, year, month,  TIN_N_kg_ha), by = c("lake_ID", "year", "month")) %>%
+  left_join(cumulative_dep %>% select(lake_ID, year, month,  cum_TIN_N_kg_ha), by = c("lake_ID", "year", "month")) %>%
   left_join(q50 %>% select(date, day50_doy), by = "date") %>%
   select(-year, -month)
 
@@ -199,17 +210,149 @@ base::load("data/mj_aslo/summer_lake_surface_chem.RData")
 base::load("data/mj_aslo/climate.RData")
 base::load("data/mj_aslo/nadp.RData")
 
+
+#add water year total up until date of sampling
+lv_nitrate_joined <- lv_nitrate_joined %>%
+  mutate(wy = year(date) + (month(date) >= 10)) %>%
+  arrange(lake_ID, date) %>%
+  group_by(lake_ID, wy) %>%
+  mutate(cum_wy_precip = cumsum(precip)) %>%
+  ungroup()
+
+#add in lagged precip and test summer vs winter precip in the models       
 wateryear_climate<-wateryear_climate%>%
   mutate(lake_ID = tolower(lake_ID))
-#add in water year total precip and test summer vs winter precip in the models       
 lv_nitrate_joined <- lv_nitrate_joined %>%
   mutate(year = year(date))%>%
-  left_join(wateryear_climate %>% select(lake_ID, water_year, WY_total_precip, lag1_WY_total_precip, WY_totalprecip_2yr_mean), #only the water year total precip col for now...but this df has lagged precip, temp, and pdsi, could consider adding later (can also lag within gam)
+  left_join(wateryear_climate %>% select(lake_ID, water_year, lag1_WY_total_precip, WY_totalprecip_2yr_mean), #only the water year total precip col for now...but this df has lagged precip, temp, and pdsi, could consider adding later (can also lag within gam)
             by = c("lake_ID", "year" = "water_year"))
 
 #drop LS samples for gams
 lv_nitrate_joined <- lv_nitrate_joined %>%
   filter(!site_ID %in% c("loc_ls", "sky_ls"))
+
+
+
+
+
+lv_nitrate_monthly <- lv_nitrate %>% 
+  mutate(year = year(date), month = month(date)) %>%   
+  filter(month %in% 7:9) %>% 
+  group_by(lake_ID, site_ID, year, month) %>% 
+  summarise(NO3_mgL = mean(NO3_mgL, na.rm = TRUE)) %>% 
+  mutate(date = as.Date(sprintf("%d-%02d-01", year, month))) %>% 
+  drop_na() %>% 
+  arrange(site_ID, date) %>% 
+  select(-year, -month)
+
+
+#add a more integrated deposition metric - like cumulative WY totals up until the date of sampling maybe?
+cumulative_dep <- nadp_wetdep %>%
+  mutate(lake_ID = tolower(lake_ID),
+    date = as.Date(sprintf("%d-%02d-01", year, month)),
+    wy = if_else(month >= 10, year + 1, year)) %>%
+  arrange(lake_ID, wy, date) %>%
+  group_by(lake_ID, wy) %>%
+  mutate(across(c(TIN_N_kg_ha, SO4_kg_ha, NO3_kg_ha, NH4_kg_ha),
+                cumsum, .names = "cum_{.col}")) %>%
+  ungroup() %>%
+  select(-year, -month)
+
+#calc a cumulative precip metric
+cumulative_precip <- daily_climate %>% 
+  mutate(year = year(date),
+         month = month(date),
+         wy = if_else(month >= 10, year + 1, year)) %>% 
+  arrange(lake_ID, date) %>% 
+  group_by(lake_ID, wy) %>% 
+  mutate(cum_wy_precip = cumsum(precip)) %>% 
+  ungroup() %>% 
+  filter(month %in% 7:9) %>% 
+  group_by(lake_ID, year, month) %>% 
+  summarise(cum_wy_precip = max(cum_wy_precip, na.rm = TRUE),
+            .groups = "drop") %>% 
+  mutate(date = as.Date(sprintf("%d-%02d-01", year, month))) %>% 
+  drop_na()%>% 
+  select(-year, -month)
+
+#mean summer temp
+summer_temp_monthly <- daily_climate %>% 
+  mutate(year = year(date),
+         month = month(date),
+         tmean = (tmmn + tmmx) / 2) %>% 
+  filter(month %in% 7:9) %>% 
+  group_by(lake_ID, year, month) %>% 
+  summarise(mean_summer_temp = mean(tmean, na.rm = TRUE),
+            .groups = "drop") %>% 
+  mutate(date = as.Date(sprintf("%d-%02d-01", year, month))) %>% 
+  drop_na()%>% 
+  select(-year, -month)
+
+#total summer precip
+summer_precip_monthly <- daily_climate %>% 
+  mutate(year = year(date),
+         month = month(date)) %>% 
+  filter(month %in% 7:9) %>% 
+  group_by(lake_ID, year, month) %>% 
+  summarise(summer_precip = sum(precip, na.rm = TRUE),
+            .groups = "drop") %>% 
+  mutate(date = as.Date(sprintf("%d-%02d-01", year, month)))%>% 
+  select(-year, -month)
+
+#mean wy temp anomaly
+
+temp_anomaly_monthly <- temp_anomaly_bysite_daily %>% 
+  as.data.frame() %>% 
+  rownames_to_column("site_ID") %>% 
+  pivot_longer(cols = -site_ID,names_to = "date", values_to = "temp_anomaly") %>% 
+  mutate( date = as.Date(date),lake_ID = sub("_.*", "", site_ID),year = year(date),month = month(date)) %>% 
+  filter(month %in% 7:9) %>% 
+  group_by(lake_ID, site_ID, year, month) %>% 
+  summarise(mean_temp_anomaly = mean(temp_anomaly, na.rm = TRUE),.groups = "drop") %>% 
+  mutate(date = as.Date(sprintf("%d-%02d-01", year, month))) %>% 
+  drop_na() %>% 
+  select(lake_ID, date, mean_temp_anomaly)
+
+#combine with the nitrate monthly
+lv_nitrate_monthly <- lv_nitrate_monthly %>% ungroup()
+cumulative_precip <- cumulative_precip %>% ungroup()
+summer_temp_monthly <- summer_temp_monthly %>% ungroup()
+temp_anomaly_monthly <- temp_anomaly_monthly %>% ungroup()
+str(lv_nitrate_monthly)
+str(cumulative_precip)
+str(cumulative_dep)
+str(summer_temp_monthly)
+str(temp_anomaly_monthly)
+
+lv_nitrate_monthly_covariates <- lv_nitrate_monthly %>% 
+  left_join(cumulative_precip, by = c("lake_ID", "date")) %>% 
+  left_join(cumulative_dep, by = c("lake_ID", "date")) %>% 
+  left_join(summer_temp_monthly, by = c("lake_ID", "date")) %>% 
+  left_join(summer_precip_monthly, by = c("lake_ID", "date")) %>% 
+  left_join(temp_anomaly_monthly, by = c("lake_ID", "date"))
+
+#drop LS samples for gams
+lv_nitrate_monthly_covariates <- lv_nitrate_monthly_covariates %>%
+  filter(!site_ID %in% c("loc_ls", "sky_ls"))
+
+
+lv_nitrate_yearly_baseflow <- lv_nitrate_monthly_covariates %>%
+  group_by(lake_ID, site_ID, year) %>%
+  summarise(across(where(is.numeric), ~ mean(.x, na.rm = TRUE)),
+            .groups = "drop")
+
+
+#--update which one before running gams---------------------------------------------------------------------------------------------------------
+#split by lake ID (baseflow means only)
+unique(lv_nitrate_monthly_covariates$site_ID)
+lake_list <- split(lv_nitrate_monthly_covariates, lv_nitrate_monthly_covariates$site_ID)
+colnames(lv_nitrate_monthly_covariates)
+
+#split by lake ID (baseflow one value per year only)
+unique(lv_nitrate_yearly_baseflow$site_ID)
+lake_list <- split(lv_nitrate_yearly_baseflow, lv_nitrate_yearly_baseflow$site_ID)
+colnames(lv_nitrate_yearly_baseflow)
+
 
 
 #split by lake ID
@@ -219,7 +362,7 @@ lake_list <- split(lv_nitrate_joined, lv_nitrate_joined$site_ID)
 
 # nitrate -----------------------------------------------------------------------------------------------------
 unique(lv_nitrate_joined$lake_ID)
-test_model <- gam(NO3_mgL ~  s(TIN_N_kg_ha),
+test_model <- gam(NO3_mgL ~  s(cum_TIN_N_kg_ha),
                   data = lv_nitrate_joined, 
                   subset = site_ID == "loc_in", 
                   family = Gamma(link = "log"),
@@ -234,44 +377,53 @@ plot(test_model, trans = exp, shade = TRUE, seWithMean = TRUE)
 #climate x dep
 #testing out both WY precip totals vs. summer precip totals - indented for easy commenting out if desired
 
-
+nitrate_models <- list(
+  temp_anom                          = NO3_mgL ~ s(mean_temp_anomaly)+ s(year, bs = "re"),
+  temp_mean                          = NO3_mgL ~ s(mean_summer_temp)+ s(year, bs = "re"),
+  precip                        = NO3_mgL ~ s(summer_precip)+ s(year, bs = "re"),
+  WYprecip                      = NO3_mgL ~ s(cum_wy_precip)+ s(year, bs = "re"),
+  temp_precip                   = NO3_mgL ~ s(mean_temp_anomaly) + s(summer_precip) + s(year, bs = "re"),       
+  temp_WYprecip                 = NO3_mgL ~ s(mean_temp_anomaly) + s(cum_wy_precip)+ s(year, bs = "re"),
+  wetdep_TIN                    = NO3_mgL ~ s(cum_TIN_N_kg_ha)+ s(year, bs = "re"),
+  temp_wetdep                   = NO3_mgL ~ s(mean_temp_anomaly) + s(cum_TIN_N_kg_ha)+ s(year, bs = "re"),
+  precip_wetdep                 = NO3_mgL ~ s(summer_precip) + s(cum_TIN_N_kg_ha)+ s(year, bs = "re"), 
+  WYprecip_wetdep               = NO3_mgL ~ s(cum_wy_precip) + s(cum_TIN_N_kg_ha)+ s(year, bs = "re"),
+  temp_precip_wetdep            = NO3_mgL ~ s(mean_temp_anomaly) + s(summer_precip) + s(cum_TIN_N_kg_ha)+ s(year, bs = "re"), 
+  temp_WYprecip_wetdep          = NO3_mgL ~ s(mean_temp_anomaly) + s(cum_wy_precip) + s(cum_TIN_N_kg_ha)+ s(year, bs = "re"))
 
 
 nitrate_models <- list(
-  temp                          = NO3_mgL ~ s(temp_anomaly),
-  precip                        = NO3_mgL ~ s(precip),
-  WYprecip                      = NO3_mgL ~ s(WY_total_precip),
-  temp_precip                   = NO3_mgL ~ s(temp_anomaly) + s(precip),       
-  temp_WYprecip                 = NO3_mgL ~ s(temp_anomaly) + s(WY_total_precip),
-  wetdep_TIN                    = NO3_mgL ~ s(TIN_N_kg_ha),
-  temp_wetdep                   = NO3_mgL ~ s(temp_anomaly) + s(TIN_N_kg_ha),
-  precip_wetdep                 = NO3_mgL ~ s(precip) + s(TIN_N_kg_ha),        
-  WYprecip_wetdep               = NO3_mgL ~ s(WY_total_precip) + s(TIN_N_kg_ha),
-  temp_precip_wetdep            = NO3_mgL ~ s(temp_anomaly) + s(precip) + s(TIN_N_kg_ha), 
-  temp_WYprecip_wetdep          = NO3_mgL ~ s(temp_anomaly) + s(WY_total_precip) + s(TIN_N_kg_ha),
-  pdsi                          = NO3_mgL ~ s(pdsi),
-  pdsi_wetdep                   = NO3_mgL ~ s(pdsi) + s(TIN_N_kg_ha),
+  temp_anom = NO3_mgL ~ s(temp_anomaly) + s(year, bs = "re"),
+  precip = NO3_mgL ~ s(precip) + s(year, bs = "re"),
+  WYprecip = NO3_mgL ~ s(cum_wy_precip) + s(year, bs = "re"),
+  temp_precip = NO3_mgL ~ s(temp_anomaly) + s(precip) + s(year, bs = "re"),
+  temp_WYprecip = NO3_mgL ~ s(temp_anomaly) + s(cum_wy_precip) + s(year, bs = "re"),
+  wetdep_TIN = NO3_mgL ~ s(cum_TIN_N_kg_ha) + s(year, bs = "re"),
+  temp_wetdep = NO3_mgL ~ s(temp_anomaly) + s(cum_TIN_N_kg_ha) + s(year, bs = "re"),
+  precip_wetdep = NO3_mgL ~ s(precip) + s(cum_TIN_N_kg_ha) + s(year, bs = "re"),
+  WYprecip_wetdep = NO3_mgL ~ s(cum_wy_precip) + s(cum_TIN_N_kg_ha) + s(year, bs = "re"),
+  temp_precip_wetdep = NO3_mgL ~ s(temp_anomaly) + s(precip) + s(cum_TIN_N_kg_ha) + s(year, bs = "re"),
+  temp_WYprecip_wetdep = NO3_mgL ~ s(temp_anomaly) + s(cum_wy_precip) + s(cum_TIN_N_kg_ha) + s(year, bs = "re"),
   
-  q50                           = NO3_mgL ~ s(day50_doy),
-  q50_temp                      = NO3_mgL ~ s(day50_doy) + s(temp_anomaly),
-  q50_wetdep                    = NO3_mgL ~ s(day50_doy) + s(TIN_N_kg_ha),
-  q50_temp_wetdep               = NO3_mgL ~ s(day50_doy) + s(temp_anomaly) + s(TIN_N_kg_ha),
-  q50_WYprecip                  = NO3_mgL ~ s(day50_doy) + s(WY_total_precip),
-  q50_WYprecip_wetdep           = NO3_mgL ~ s(day50_doy) + s(WY_total_precip) + s(TIN_N_kg_ha),
+  q50 = NO3_mgL ~ s(day50_doy) + s(year, bs = "re"),
+  q50_temp = NO3_mgL ~ s(day50_doy) + s(temp_anomaly) + s(year, bs = "re"),
+  q50_wetdep = NO3_mgL ~ s(day50_doy) + s(cum_TIN_N_kg_ha) + s(year, bs = "re"),
+  q50_temp_wetdep = NO3_mgL ~ s(day50_doy) + s(temp_anomaly) + s(cum_TIN_N_kg_ha) + s(year, bs = "re"),
+  q50_WYprecip = NO3_mgL ~ s(day50_doy) + s(cum_wy_precip) + s(year, bs = "re"),
+  q50_WYprecip_wetdep = NO3_mgL ~ s(day50_doy) + s(cum_wy_precip) + s(cum_TIN_N_kg_ha) + s(year, bs = "re"),
+  q50_WYprecip_wetdep_temp = NO3_mgL ~ s(day50_doy) + s(cum_wy_precip) + s(cum_TIN_N_kg_ha) + s(temp_anomaly) + s(year, bs = "re"),
   
-  laggedprecip1_lastyearonly    = NO3_mgL ~ s(lag1_WY_total_precip),
-  laggedprecip1_thisyear        = NO3_mgL ~ s(lag1_WY_total_precip) + s(WY_total_precip),
-  laggedprecip1_temp            = NO3_mgL ~ s(lag1_WY_total_precip) + s(WY_total_precip) + s(temp_anomaly),  
-  laggedprecip1_wetdep          = NO3_mgL ~ s(lag1_WY_total_precip) + s(WY_total_precip) + s(TIN_N_kg_ha),
-  laggedprecip1_temp_wetdep     = NO3_mgL ~ s(lag1_WY_total_precip) + s(WY_total_precip) + s(temp_anomaly) + s(TIN_N_kg_ha),
+  laggedprecip1_lastyearonly = NO3_mgL ~ s(lag1_WY_total_precip) + s(year, bs = "re"),
+  laggedprecip1_thisyear = NO3_mgL ~ s(lag1_WY_total_precip) + s(cum_wy_precip) + s(year, bs = "re"),
+  laggedprecip1_temp = NO3_mgL ~ s(lag1_WY_total_precip) + s(cum_wy_precip) + s(temp_anomaly) + s(year, bs = "re"),
+  laggedprecip1_wetdep = NO3_mgL ~ s(lag1_WY_total_precip) + s(cum_wy_precip) + s(cum_TIN_N_kg_ha) + s(year, bs = "re"),
+  laggedprecip1_temp_wetdep = NO3_mgL ~ s(lag1_WY_total_precip) + s(cum_wy_precip) + s(temp_anomaly) + s(cum_TIN_N_kg_ha) + s(year, bs = "re"),
   
-  twoyearmeanprecip             = NO3_mgL ~ s(WY_totalprecip_2yr_mean),
-  twoyearmeanprecip_temp        = NO3_mgL ~ s(WY_totalprecip_2yr_mean) + s(temp_anomaly),
-  twoyearmeanprecip_wetdep      = NO3_mgL ~ s(WY_totalprecip_2yr_mean) + s(TIN_N_kg_ha), 
-  twoyearmeanprecip_temp_wetdep = NO3_mgL ~ s(WY_totalprecip_2yr_mean) + s(temp_anomaly) + s(TIN_N_kg_ha)
-
+  twoyearmeanprecip = NO3_mgL ~ s(WY_totalprecip_2yr_mean) + s(year, bs = "re"),
+  twoyearmeanprecip_temp = NO3_mgL ~ s(WY_totalprecip_2yr_mean) + s(temp_anomaly) + s(year, bs = "re"),
+  twoyearmeanprecip_wetdep = NO3_mgL ~ s(WY_totalprecip_2yr_mean) + s(cum_TIN_N_kg_ha) + s(year, bs = "re"),
+  twoyearmeanprecip_temp_wetdep = NO3_mgL ~ s(WY_totalprecip_2yr_mean) + s(temp_anomaly) + s(cum_TIN_N_kg_ha) + s(year, bs = "re")
 )
-
 
 # list out all the outputs i want from each model
 all_models <- list()
@@ -469,7 +621,8 @@ best_models_nitrate <- best_models_nitrate %>%
 
 
 
-
+q50_WYprecip_wetdep_temp_stats <- stats %>%
+  filter(model == "q50_WYprecip_wetdep_temp")
 library(patchwork)
 ## IAO addition:
 ## Pulling out the best models and then exporting the smooths
@@ -478,7 +631,7 @@ selected_keys <- best_models_nitrate %>%
   pull(lake_model)
 
 ## Set the directory of where two put the plots
-out_dir <- here::here("plots", "nitrate GAMs")
+out_dir <- here::here("plots", "baseflowmeans nitrate GAMs 05072026")
 
 if (!dir.exists(out_dir)) {
   dir.create(out_dir, recursive = TRUE)
@@ -514,7 +667,7 @@ for (batch_id in seq_len(n_batches)) {
     patchwork::plot_annotation(title = key)
   
   ggsave(
-    filename = here::here("plots", "nitrate GAMs",
+    filename = here::here("plots", "baseflowmeans nitrate GAMs 05072026",
                           paste0("GAM_", safe_name, ".png")),
     plot     = p,
     width    = 8,
@@ -524,7 +677,45 @@ for (batch_id in seq_len(n_batches)) {
   )
 }
 
+#save each smooth separately
+selected_keys <- best_models_nitrate %>% 
+  mutate(lake_model = paste(lake_ID, model, sep = "_")) %>% 
+  pull(lake_model)
 
+out_dir <- here::here("plots", "separate baseflowmeans nitrate GAMs 05072026")
+
+if (!dir.exists(out_dir)) dir.create(out_dir, recursive = TRUE)
+
+for (key in selected_keys) {
+  
+  mod <- all_models[[key]]
+  
+  if (inherits(mod, "gam")) {
+    
+    smooths <- gratia::smooths(mod)
+    
+    for (sm in smooths) {
+      
+      safe_key <- gsub("[^A-Za-z0-9_]", "_", key)
+      safe_sm  <- gsub("[^A-Za-z0-9_]", "_", sm)
+      
+      p <- gratia::draw(mod, select = sm) +
+        patchwork::plot_annotation(title = paste(key, sm, sep = " : "))
+      
+      ggsave(
+        filename = here::here(
+          out_dir,
+          paste0("GAM_", safe_key, "_", safe_sm, ".png")
+        ),
+        plot = p,
+        width = 6,
+        height = 5,
+        units = "in",
+        dpi = 300
+      )
+    }
+  }
+}
 
 
 
@@ -573,13 +764,23 @@ temp_anomaly_bysite_daily <- temp_anomaly_bysite_daily %>%
 nadp_wetdep <- nadp_wetdep %>%
   mutate(lake_ID = tolower(lake_ID))
 
+#make a more integrated deposition metric - like cumulative WY totals up until the date of sampling maybe?
+cumulative_dep <- nadp_wetdep %>%
+  mutate(date = as.Date(sprintf("%d-%02d-01", year, month)), wy = if_else(month >= 10, year + 1, year)) %>%
+  arrange(lake_ID, wy, date) %>%
+  group_by(lake_ID, wy) %>%
+  mutate(across(c(TIN_N_kg_ha, SO4_kg_ha, NO3_kg_ha, NH4_kg_ha),
+                cumsum, .names = "cum_{.col}" )) %>%
+  ungroup()
+
+
 
 lv_sulfate_joined <- lv_sulfate %>%
   mutate(year = year(date), month = month(date)) %>%
   left_join(daily_climate, by = c("lake_ID", "date")) %>%
   left_join(temp_anomaly_bysite_daily, by = c("site_ID" = "lake_ID", "date")) %>%
-  left_join(nadp_wetdep %>% select(lake_ID, year, month, SO4_kg_ha),
-            by = c("lake_ID", "year", "month")) %>%
+  left_join(nadp_wetdep %>% select(lake_ID, year, month, SO4_kg_ha),by = c("lake_ID", "year", "month")) %>%
+  left_join(cumulative_dep %>% select(lake_ID, year, month, cum_SO4_kg_ha),by = c("lake_ID", "year", "month")) %>%
   left_join(q50 %>% select(date, day50_doy), by = "date") %>%
   select(-year, -month)
 
@@ -598,6 +799,14 @@ base::load("data/mj_aslo/summer_lake_surface_chem.RData")
 base::load("data/mj_aslo/climate.RData")
 base::load("data/mj_aslo/nadp.RData")
 
+#add water year total up until date of sampling
+lv_sulfate_joined <- lv_sulfate_joined %>%
+  mutate(wy = year(date) + (month(date) >= 10)) %>%
+  arrange(lake_ID, date) %>%
+  group_by(lake_ID, wy) %>%
+  mutate(cum_wy_precip = cumsum(precip)) %>%
+  ungroup()
+
 wateryear_climate<-wateryear_climate%>%
   mutate(lake_ID = tolower(lake_ID))
 #add in water year total precip and test summer vs winter precip in the models       
@@ -611,12 +820,71 @@ lv_sulfate_joined <- lv_sulfate_joined %>%
   filter(!site_ID %in% c("loc_ls", "sky_ls"))
 
 
-#split by lake ID
+
+
+
+lv_sulfate_monthly <- lv_sulfate %>% 
+  mutate(year = year(date), month = month(date)) %>%   
+  filter(month %in% 7:9) %>% 
+  group_by(lake_ID, site_ID, year, month) %>% 
+  summarise(SO4_mgL = mean(SO4_mgL, na.rm = TRUE)) %>% 
+  mutate(date = as.Date(sprintf("%d-%02d-01", year, month))) %>% 
+  drop_na() %>% 
+  arrange(site_ID, date) %>% 
+  select(-year, -month)
+
+
+#combine with the sulfate monthly
+lv_sulfate_monthly <- lv_sulfate_monthly %>% ungroup()
+cumulative_precip <- cumulative_precip %>% ungroup()
+summer_temp_monthly <- summer_temp_monthly %>% ungroup()
+temp_anomaly_monthly <- temp_anomaly_monthly %>% ungroup()
+str(lv_sulfate_monthly)
+str(cumulative_precip)
+str(cumulative_dep)
+str(summer_temp_monthly)
+str(temp_anomaly_monthly)
+
+lv_sulfate_monthly_covariates <- lv_sulfate_monthly %>% 
+  left_join(cumulative_precip, by = c("lake_ID", "date")) %>% 
+  left_join(cumulative_dep, by = c("lake_ID", "date", "year")) %>% 
+  left_join(summer_temp_monthly, by = c("lake_ID", "date")) %>% 
+  left_join(summer_precip_monthly, by = c("lake_ID", "date")) %>% 
+  left_join(temp_anomaly_monthly, by = c("lake_ID", "date"))
+
+#drop LS samples for gams
+lv_sulfate_monthly_covariates <- lv_sulfate_monthly_covariates %>%
+  filter(!site_ID %in% c("loc_ls", "sky_ls"))
+
+
+lv_sulfate_yearly_baseflow <- lv_sulfate_monthly_covariates %>%
+  group_by(lake_ID, site_ID, year) %>%
+  summarise(across(where(is.numeric), ~ mean(.x, na.rm = TRUE)),
+            .groups = "drop")
+
+
+#--update which one before running gams---------------------------------------------------------------------------------------------------------
+#split by lake ID (baseflow means only)
+unique(lv_sulfate_monthly_covariates$site_ID)
+lake_list <- split(lv_sulfate_monthly_covariates, lv_sulfate_monthly_covariates$site_ID)
+colnames(lv_sulfate_monthly_covariates)
+
+#split by lake ID (baseflow one value per year only)
+unique(lv_sulfate_yearly_baseflow$site_ID)
+lake_list <- split(lv_sulfate_yearly_baseflow, lv_sulfate_yearly_baseflow$site_ID)
+colnames(lv_sulfate_yearly_baseflow)
+
+
+#original
 unique(lv_sulfate_joined$site_ID)
 lake_list <- split(lv_sulfate_joined, lv_sulfate_joined$site_ID)
 
+
+
+#model ----------------------------
+
 unique(lv_sulfate_joined$lake_ID)
-test_model <- gam(SO4_mgL ~  s(SO4_kg_ha),
+test_model <- gam(SO4_mgL ~  s(cum_SO4_kg_ha),
                   data = lv_sulfate_joined, 
                   subset = site_ID == "loc_in", 
                   family = Gamma(link = "log"),
@@ -630,6 +898,20 @@ plot(test_model, trans = exp, shade = TRUE, seWithMean = TRUE)
 
 #climate x dep
 #testing out both WY precip totals vs. summer precip totals - indented for easy commenting out if desired
+sulfate_models <- list(
+  temp_anom                          = SO4_mgL ~ s(mean_temp_anomaly)+ s(year, bs = "re"),
+  temp_mean                          = SO4_mgL ~ s(mean_summer_temp)+ s(year, bs = "re"),
+  precip                        = SO4_mgL ~ s(summer_precip)+ s(year, bs = "re"),
+  WYprecip                      = SO4_mgL ~ s(cum_wy_precip)+ s(year, bs = "re"),
+  temp_precip                   = SO4_mgL ~ s(mean_temp_anomaly) + s(summer_precip) + s(year, bs = "re"),       
+  temp_WYprecip                 = SO4_mgL ~ s(mean_temp_anomaly) + s(cum_wy_precip)+ s(year, bs = "re"),
+  wetdep_TIN                    = SO4_mgL ~ s(cum_SO4_kg_ha)+ s(year, bs = "re"),
+  temp_wetdep                   = SO4_mgL ~ s(mean_temp_anomaly) + s(cum_SO4_kg_ha)+ s(year, bs = "re"),
+  precip_wetdep                 = SO4_mgL ~ s(summer_precip) + s(cum_SO4_kg_ha)+ s(year, bs = "re"), 
+  WYprecip_wetdep               = SO4_mgL ~ s(cum_wy_precip) + s(cum_SO4_kg_ha)+ s(year, bs = "re"),
+  temp_precip_wetdep            = SO4_mgL ~ s(mean_temp_anomaly) + s(summer_precip) + s(cum_SO4_kg_ha)+ s(year, bs = "re"), 
+  temp_WYprecip_wetdep          = SO4_mgL ~ s(mean_temp_anomaly) + s(cum_wy_precip) + s(cum_SO4_kg_ha)+ s(year, bs = "re"))
+
 
 
 
@@ -637,35 +919,36 @@ plot(test_model, trans = exp, shade = TRUE, seWithMean = TRUE)
 sulfate_models <- list(
   temp                          = SO4_mgL ~ s(temp_anomaly),
   precip                        = SO4_mgL ~ s(precip),
-  WYprecip                      = SO4_mgL ~ s(WY_total_precip),
+  WYprecip                      = SO4_mgL ~ s(cum_wy_precip),
   temp_precip                   = SO4_mgL ~ s(temp_anomaly) + s(precip),       
-  temp_WYprecip                 = SO4_mgL ~ s(temp_anomaly) + s(WY_total_precip),
-  wetdep_TIN                    = SO4_mgL ~ s(SO4_kg_ha),
-  temp_wetdep                   = SO4_mgL ~ s(temp_anomaly) + s(SO4_kg_ha),
-  precip_wetdep                 = SO4_mgL ~ s(precip) + s(SO4_kg_ha),        
-  WYprecip_wetdep               = SO4_mgL ~ s(WY_total_precip) + s(SO4_kg_ha),
-  temp_precip_wetdep            = SO4_mgL ~ s(temp_anomaly) + s(precip) + s(SO4_kg_ha), 
-  temp_WYprecip_wetdep          = SO4_mgL ~ s(temp_anomaly) + s(WY_total_precip) + s(SO4_kg_ha),
+  temp_WYprecip                 = SO4_mgL ~ s(temp_anomaly) + s(cum_wy_precip),
+  wetdep_TIN                    = SO4_mgL ~ s(cum_SO4_kg_ha),
+  temp_wetdep                   = SO4_mgL ~ s(temp_anomaly) + s(cum_SO4_kg_ha),
+  precip_wetdep                 = SO4_mgL ~ s(precip) + s(cum_SO4_kg_ha),        
+  WYprecip_wetdep               = SO4_mgL ~ s(cum_wy_precip) + s(cum_SO4_kg_ha),
+  temp_precip_wetdep            = SO4_mgL ~ s(temp_anomaly) + s(precip) + s(cum_SO4_kg_ha), 
+  temp_WYprecip_wetdep          = SO4_mgL ~ s(temp_anomaly) + s(cum_wy_precip) + s(cum_SO4_kg_ha),
   pdsi                          = SO4_mgL ~ s(pdsi),
-  pdsi_wetdep                   = SO4_mgL ~ s(pdsi) + s(SO4_kg_ha),
+  pdsi_wetdep                   = SO4_mgL ~ s(pdsi) + s(cum_SO4_kg_ha),
   
   q50                           = SO4_mgL ~ s(day50_doy),
   q50_temp                      = SO4_mgL ~ s(day50_doy) + s(temp_anomaly),
-  q50_wetdep                    = SO4_mgL ~ s(day50_doy) + s(SO4_kg_ha),
-  q50_temp_wetdep               = SO4_mgL ~ s(day50_doy) + s(temp_anomaly) + s(SO4_kg_ha),
-  q50_WYprecip                  = SO4_mgL ~ s(day50_doy) + s(WY_total_precip),
-  q50_WYprecip_wetdep           = SO4_mgL ~ s(day50_doy) + s(WY_total_precip) + s(SO4_kg_ha),
+  q50_wetdep                    = SO4_mgL ~ s(day50_doy) + s(cum_SO4_kg_ha),
+  q50_temp_wetdep               = SO4_mgL ~ s(day50_doy) + s(temp_anomaly) + s(cum_SO4_kg_ha),
+  q50_WYprecip                  = SO4_mgL ~ s(day50_doy) + s(cum_wy_precip),
+  q50_WYprecip_wetdep           = SO4_mgL ~ s(day50_doy) + s(cum_wy_precip) + s(cum_SO4_kg_ha),
+  q50_WYprecip_wetdep_temp           = SO4_mgL ~ s(day50_doy) + s(cum_wy_precip) + s(cum_SO4_kg_ha)+ s(temp_anomaly),
   
   laggedprecip1_lastyearonly    = SO4_mgL ~ s(lag1_WY_total_precip),
-  laggedprecip1_thisyear        = SO4_mgL ~ s(lag1_WY_total_precip) + s(WY_total_precip),
-  laggedprecip1_temp            = SO4_mgL ~ s(lag1_WY_total_precip) + s(WY_total_precip) + s(temp_anomaly),  
-  laggedprecip1_wetdep          = SO4_mgL ~ s(lag1_WY_total_precip) + s(WY_total_precip) + s(SO4_kg_ha),
-  laggedprecip1_temp_wetdep     = SO4_mgL ~ s(lag1_WY_total_precip) + s(WY_total_precip) + s(temp_anomaly) + s(SO4_kg_ha),
+  laggedprecip1_thisyear        = SO4_mgL ~ s(lag1_WY_total_precip) + s(cum_wy_precip),
+  laggedprecip1_temp            = SO4_mgL ~ s(lag1_WY_total_precip) + s(cum_wy_precip) + s(temp_anomaly),  
+  laggedprecip1_wetdep          = SO4_mgL ~ s(lag1_WY_total_precip) + s(cum_wy_precip) + s(cum_SO4_kg_ha),
+  laggedprecip1_temp_wetdep     = SO4_mgL ~ s(lag1_WY_total_precip) + s(cum_wy_precip) + s(temp_anomaly) + s(cum_SO4_kg_ha),
   
   twoyearmeanprecip             = SO4_mgL ~ s(WY_totalprecip_2yr_mean),
   twoyearmeanprecip_temp        = SO4_mgL ~ s(WY_totalprecip_2yr_mean) + s(temp_anomaly),
-  twoyearmeanprecip_wetdep      = SO4_mgL ~ s(WY_totalprecip_2yr_mean) + s(SO4_kg_ha), 
-  twoyearmeanprecip_temp_wetdep = SO4_mgL ~ s(WY_totalprecip_2yr_mean) + s(temp_anomaly) + s(SO4_kg_ha)
+  twoyearmeanprecip_wetdep      = SO4_mgL ~ s(WY_totalprecip_2yr_mean) + s(cum_SO4_kg_ha), 
+  twoyearmeanprecip_temp_wetdep = SO4_mgL ~ s(WY_totalprecip_2yr_mean) + s(temp_anomaly) + s(cum_SO4_kg_ha)
   
 )
 
@@ -777,74 +1060,74 @@ filtered_stats <- subset(stats, Deviance_Explained < 90)
 
 
 # #add linear trends to exlude lakes with opposite trends from deposition----------------
-# lake_list <- split(lv_sulfate_joined, lv_sulfate_joined$site_ID)
-# 
-# lm_results <- lapply(names(lake_list), function(lake_name) {
-#   
-#   df <- lake_list[[lake_name]]
-#   
-#   model <- lm(SO4_mgL ~ year, data = df)
-#   sm <- summary(model)
-#   coefs <- sm$coefficients
-#   
-#   slope <- NA
-#   pval <- NA
-#   
-#   # only extract if year exists
-#   if ("year" %in% rownames(coefs)) {
-#     slope <- coefs["year", "Estimate"]
-#     pval  <- coefs["year", "Pr(>|t|)"]
-#   }
-#   
-#   data.frame(
-#     lake_ID = lake_name,
-#     slope = slope,
-#     p_value = pval,
-#     r_squared = sm$r.squared
-#   )
-# })
-# 
-# lm_results_df <- do.call(rbind, lm_results)
-# 
-# positive_lakes_sulfate <- lm_results_df %>%
-#   filter(p_value < 0.05 & slope > 0) %>%
-#   pull(lake_ID)
-# 
-# negative_lakes_sulfate <- lm_results_df %>%
-#   filter(p_value < 0.05 & slope < 0) %>%
-#   pull(lake_ID)
-# 
-# no_linear_trend_lakes_sulfate <- setdiff(lv_sulfate_joined$lake_ID, 
-#                                          c(positive_lakes_sulfate, negative_lakes_sulfate))
-# 
-# all_lakes <- lv_sulfate_joined %>%
-#   distinct(site_ID) %>%
-#   as.data.frame()
-# 
-# colnames(all_lakes) <- "lake_ID"
-# 
-# all_lakes$sulfate <- ifelse(all_lakes$lake_ID %in% positive_lakes_sulfate, "positive",
-#                             ifelse(all_lakes$lake_ID %in% negative_lakes_sulfate, "negative",
-#                                    ifelse(all_lakes$lake_ID %in% no_linear_trend_lakes_sulfate, "no trend", NA)))
-# 
-# all_lakes_lineartrends <- all_lakes
-# 
-# 
-# 
-# 
-# 
-# filtered_stats <- filtered_stats %>%
-#   left_join(all_lakes_lineartrends %>% select(lake_ID, sulfate), by = "lake_ID")
-# 
-# 
-# filtered_stats2 <- filtered_stats %>%
-#   filter(
-#     !(grepl("wetdep", model) & sulfate != "negative")
-#   )
+lake_list <- split(lv_sulfate_joined, lv_sulfate_joined$site_ID)
+
+lm_results <- lapply(names(lake_list), function(lake_name) {
+
+  df <- lake_list[[lake_name]]
+
+  model <- lm(SO4_mgL ~ year, data = df)
+  sm <- summary(model)
+  coefs <- sm$coefficients
+
+  slope <- NA
+  pval <- NA
+
+  # only extract if year exists
+  if ("year" %in% rownames(coefs)) {
+    slope <- coefs["year", "Estimate"]
+    pval  <- coefs["year", "Pr(>|t|)"]
+  }
+
+  data.frame(
+    lake_ID = lake_name,
+    slope = slope,
+    p_value = pval,
+    r_squared = sm$r.squared
+  )
+})
+
+lm_results_df <- do.call(rbind, lm_results)
+
+positive_lakes_sulfate <- lm_results_df %>%
+  filter(p_value < 0.05 & slope > 0) %>%
+  pull(lake_ID)
+
+negative_lakes_sulfate <- lm_results_df %>%
+  filter(p_value < 0.05 & slope < 0) %>%
+  pull(lake_ID)
+
+no_linear_trend_lakes_sulfate <- setdiff(lv_sulfate_joined$lake_ID,
+                                         c(positive_lakes_sulfate, negative_lakes_sulfate))
+
+all_lakes <- lv_sulfate_joined %>%
+  distinct(site_ID) %>%
+  as.data.frame()
+
+colnames(all_lakes) <- "lake_ID"
+
+all_lakes$sulfate <- ifelse(all_lakes$lake_ID %in% positive_lakes_sulfate, "positive",
+                            ifelse(all_lakes$lake_ID %in% negative_lakes_sulfate, "negative",
+                                   ifelse(all_lakes$lake_ID %in% no_linear_trend_lakes_sulfate, "no trend", NA)))
+
+all_lakes_lineartrends <- all_lakes
 
 
 
-best_models_sulfate <- do.call(rbind, lapply(split(stats, stats$lake_ID), function(df) {
+
+
+stats <- stats %>%
+  left_join(all_lakes_lineartrends %>% select(lake_ID, sulfate), by = "lake_ID")
+
+
+filtered_stats2 <- stats %>%
+  filter(
+    !(grepl("wetdep", model) & sulfate != "negative")
+  )
+
+
+
+best_models_sulfate <- do.call(rbind, lapply(split(filtered_stats2, filtered_stats2$lake_ID), function(df) {
   #df[which.min(df$AIC), ]
   df[which.max(df$Deviance_Explained), ] #select highest dev exp instead of AIC just to see...
 }))
@@ -864,7 +1147,8 @@ best_models_sulfate <- best_models_sulfate %>%
   mutate(DE_above_50 = ifelse(Deviance_Explained > 50, TRUE, FALSE))
 
 
-
+q50_WYprecip_wetdep_temp_stats <- stats %>%
+  filter(model == "q50_WYprecip_wetdep_temp")
 
 
 library(patchwork)
@@ -875,7 +1159,7 @@ selected_keys <- best_models_sulfate %>%
   pull(lake_model)
 
 ## Set the directory of where two put the plots
-out_dir <- here::here("plots", "sulfate GAMs")
+out_dir <- here::here("plots", "new bestmodel sulfate GAMs 05072026")
 
 if (!dir.exists(out_dir)) {
   dir.create(out_dir, recursive = TRUE)
@@ -911,7 +1195,7 @@ for (batch_id in seq_len(n_batches)) {
     patchwork::plot_annotation(title = key)
   
   ggsave(
-    filename = here::here("plots", "sulfate GAMs",
+    filename = here::here("plots", "new bestmodel sulfate GAMs 05072026",
                           paste0("GAM_", safe_name, ".png")),
     plot     = p,
     width    = 8,
@@ -922,6 +1206,45 @@ for (batch_id in seq_len(n_batches)) {
 }
 
 
+#save each smooth separately
+selected_keys <- best_models_sulfate %>% 
+  mutate(lake_model = paste(lake_ID, model, sep = "_")) %>% 
+  pull(lake_model)
+
+out_dir <- here::here("plots", "new bestmodel sulfate GAMs 05072026")
+
+if (!dir.exists(out_dir)) dir.create(out_dir, recursive = TRUE)
+
+for (key in selected_keys) {
+  
+  mod <- all_models[[key]]
+  
+  if (inherits(mod, "gam")) {
+    
+    smooths <- gratia::smooths(mod)
+    
+    for (sm in smooths) {
+      
+      safe_key <- gsub("[^A-Za-z0-9_]", "_", key)
+      safe_sm  <- gsub("[^A-Za-z0-9_]", "_", sm)
+      
+      p <- gratia::draw(mod, select = sm) +
+        patchwork::plot_annotation(title = paste(key, sm, sep = " : "))
+      
+      ggsave(
+        filename = here::here(
+          out_dir,
+          paste0("GAM_", safe_key, "_", safe_sm, ".png")
+        ),
+        plot = p,
+        width = 6,
+        height = 5,
+        units = "in",
+        dpi = 300
+      )
+    }
+  }
+}
 
 
 
